@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+---
+use camelCase for variable names and make spesific file for functions for easy maintenance
