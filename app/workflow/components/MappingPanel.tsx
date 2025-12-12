@@ -158,6 +158,7 @@ export function MappingPanel({
       sourceNodeId,
       targetNodeId,
       applicationId: sourceApplication.id,
+      destinationType: 'database',
       destinationId: targetDestination.id,
       targetTable: selectedTable,
       fieldMappings,

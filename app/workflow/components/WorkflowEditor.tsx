@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode } from './nodes';
+import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode } from './nodes';
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
 import {
@@ -28,6 +28,7 @@ import {
   WorkflowNode,
   SenderAppNodeData,
   DestinationNodeData,
+  RestDestinationNodeData,
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
@@ -40,6 +41,7 @@ const nodeTypes = {
   logic: LogicNode,
   senderApp: SenderAppNode,
   destination: DestinationNode,
+  restDestination: RestDestinationNode,
 };
 
 let nodeIdCounter = 1;
@@ -63,11 +65,11 @@ function FlowCanvas() {
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
   const isEditMode = !!editId;
-  
+
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
   const { screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
-  
+
   const [workflowId, setWorkflowId] = useState<number | null>(null);
   const [workflowName, setWorkflowName] = useState('New Workflow');
   const [workflowDescription, setWorkflowDescription] = useState('');
@@ -76,7 +78,7 @@ function FlowCanvas() {
   const [isLoading, setIsLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
-  
+
   const [mappingPanel, setMappingPanel] = useState<MappingPanelState>({
     isOpen: false,
     sourceNodeId: '',
@@ -91,9 +93,9 @@ function FlowCanvas() {
   useEffect(() => {
     async function loadWorkflow() {
       if (!editId) return;
-      
+
       setIsLoading(true);
-      
+
       try {
         const response = await fetchWorkflowById(parseInt(editId));
         if (response.success && response.data) {
@@ -101,23 +103,23 @@ function FlowCanvas() {
           setWorkflowId(workflow.id);
           setWorkflowName(workflow.name);
           setWorkflowDescription(workflow.description || '');
-          
+
           // Reconstruct nodes and edges from pipelines
           const newNodes: WorkflowNode[] = [];
           const newEdges: WorkflowEdge[] = [];
           const newPipelineConfigs = new Map<string, PipelineConfig>();
-          
+
           let nodeIndex = 0;
           const appNodeMap = new Map<number, string>(); // applicationId -> nodeId
           const destNodeMap = new Map<number, string>(); // destinationId -> nodeId
-          
+
           workflow.pipelines?.forEach((pipeline, pipelineIndex) => {
             // Create sender app node if not already created
             let sourceNodeId = appNodeMap.get(pipeline.applicationId);
             if (!sourceNodeId && pipeline.application) {
               sourceNodeId = `node-loaded-app-${pipeline.applicationId}`;
               appNodeMap.set(pipeline.applicationId, sourceNodeId);
-              
+
               newNodes.push({
                 id: sourceNodeId,
                 type: 'senderApp',
@@ -133,61 +135,90 @@ function FlowCanvas() {
               });
               nodeIndex++;
             }
-            
-            // Create destination node if not already created
-            let targetNodeId = destNodeMap.get(pipeline.destinationId);
-            if (!targetNodeId && pipeline.destination) {
-              targetNodeId = `node-loaded-dest-${pipeline.destinationId}`;
-              destNodeMap.set(pipeline.destinationId, targetNodeId);
-              
-              newNodes.push({
-                id: targetNodeId,
-                type: 'destination',
-                position: { x: 500, y: 100 + ((nodeIndex - appNodeMap.size) * 200) },
-                data: {
-                  label: pipeline.destination.name,
-                  description: `${pipeline.destination.connectionType.toUpperCase()} - ${pipeline.destination.databaseName}`,
-                  category: 'destination',
-                  icon: pipeline.destination.connectionType === 'postgresql' ? 'server' : 'database',
-                  destinationId: pipeline.destination.id,
-                  destination: pipeline.destination,
-                } as DestinationNodeData,
-              });
+
+            // Create destination node based on type
+            let targetNodeId: string | undefined;
+
+            if (pipeline.destinationType === 'rest' && pipeline.restDestination) {
+              // REST destination
+              targetNodeId = destNodeMap.get(pipeline.restDestinationId || 0);
+              if (!targetNodeId) {
+                targetNodeId = `node-loaded-rest-${pipeline.restDestinationId}`;
+                destNodeMap.set(pipeline.restDestinationId || 0, targetNodeId);
+
+                newNodes.push({
+                  id: targetNodeId,
+                  type: 'restDestination',
+                  position: { x: 500, y: 100 + ((nodeIndex - appNodeMap.size) * 200) },
+                  data: {
+                    label: pipeline.restDestination.name,
+                    description: pipeline.restDestination.description || 'REST API endpoint',
+                    category: 'restDestination',
+                    icon: 'globe',
+                    restDestinationId: pipeline.restDestination.id,
+                    restDestination: pipeline.restDestination,
+                  } as RestDestinationNodeData,
+                });
+              }
+            } else if (pipeline.destination) {
+              // Database destination
+              targetNodeId = destNodeMap.get(pipeline.destinationId || 0);
+              if (!targetNodeId) {
+                targetNodeId = `node-loaded-dest-${pipeline.destinationId}`;
+                destNodeMap.set(pipeline.destinationId || 0, targetNodeId);
+
+                newNodes.push({
+                  id: targetNodeId,
+                  type: 'destination',
+                  position: { x: 500, y: 100 + ((nodeIndex - appNodeMap.size) * 200) },
+                  data: {
+                    label: pipeline.destination.name,
+                    description: `${pipeline.destination.connectionType.toUpperCase()} - ${pipeline.destination.databaseName}`,
+                    category: 'destination',
+                    icon: pipeline.destination.connectionType === 'postgresql' ? 'server' : 'database',
+                    destinationId: pipeline.destination.id,
+                    destination: pipeline.destination,
+                  } as DestinationNodeData,
+                });
+              }
             }
-            
+
             // Create edge and pipeline config
             if (sourceNodeId && targetNodeId) {
               const edgeId = `edge-${sourceNodeId}-${targetNodeId}-${pipelineIndex}`;
-              
+              const isRest = pipeline.destinationType === 'rest';
+
               newEdges.push({
                 id: edgeId,
                 source: sourceNodeId,
                 target: targetNodeId,
                 animated: true,
-                style: { stroke: '#14b8a6', strokeWidth: 2 },
-                label: pipeline.targetTable,
-                labelStyle: { fill: '#14b8a6', fontSize: 10 },
+                style: { stroke: isRest ? '#f97316' : '#14b8a6', strokeWidth: 2 },
+                label: isRest ? pipeline.restDestination?.name : pipeline.targetTable,
+                labelStyle: { fill: isRest ? '#f97316' : '#14b8a6', fontSize: 10 },
                 labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
                 labelBgPadding: [4, 2] as [number, number],
                 labelBgBorderRadius: 4,
               });
-              
+
               const config: PipelineConfig = {
                 sourceNodeId,
                 targetNodeId,
                 applicationId: pipeline.applicationId,
+                destinationType: pipeline.destinationType || 'database',
                 destinationId: pipeline.destinationId,
                 targetTable: pipeline.targetTable,
+                restDestinationId: pipeline.restDestinationId,
                 fieldMappings: pipeline.fieldMappings?.map(fm => ({
                   sourceField: fm.sourceField,
                   destinationColumn: fm.destinationColumn,
                 })) || [],
               };
-              
+
               newPipelineConfigs.set(edgeId, config);
             }
           });
-          
+
           setNodes(newNodes);
           setEdges(newEdges);
           setPipelineConfigs(newPipelineConfigs);
@@ -205,7 +236,7 @@ function FlowCanvas() {
         setIsLoading(false);
       }
     }
-    
+
     loadWorkflow();
   }, [editId, setNodes, setEdges]);
 
@@ -215,7 +246,7 @@ function FlowCanvas() {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
-      // Check if this is a sender app -> destination connection
+      // Check if this is a sender app -> database destination connection
       if (
         sourceNode?.type === 'senderApp' &&
         targetNode?.type === 'destination'
@@ -223,7 +254,7 @@ function FlowCanvas() {
         const sourceData = sourceNode.data as SenderAppNodeData;
         const targetData = targetNode.data as DestinationNodeData;
 
-        // Open mapping panel
+        // Open mapping panel for database destinations
         setMappingPanel({
           isOpen: true,
           sourceNodeId: connection.source!,
@@ -232,6 +263,51 @@ function FlowCanvas() {
           targetDestination: targetData.destination,
           pendingConnection: connection,
           existingConfig: null,
+        });
+      } else if (
+        sourceNode?.type === 'senderApp' &&
+        targetNode?.type === 'restDestination'
+      ) {
+        // REST destination - create pipeline config directly (no table mapping needed)
+        const sourceData = sourceNode.data as SenderAppNodeData;
+        const targetData = targetNode.data as RestDestinationNodeData;
+
+        const edgeId = `edge-${connection.source}-${connection.target}`;
+
+        // Create the pipeline config for REST destination
+        const config: PipelineConfig = {
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          applicationId: sourceData.application.id,
+          destinationType: 'rest',
+          restDestinationId: targetData.restDestinationId,
+          fieldMappings: [], // No field mappings for REST - sends full payload
+        };
+
+        // Add the edge with REST styling
+        setEdges((eds) =>
+          addEdge(
+            {
+              ...connection,
+              id: edgeId,
+              animated: true,
+              style: { stroke: '#f97316', strokeWidth: 2 },
+              label: targetData.restDestination?.name || 'REST API',
+              labelStyle: { fill: '#f97316', fontSize: 10 },
+              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+              labelBgPadding: [4, 2] as [number, number],
+              labelBgBorderRadius: 4,
+              data: { pipelineConfig: config },
+            },
+            eds
+          )
+        );
+
+        // Store the pipeline config
+        setPipelineConfigs((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(edgeId, config);
+          return newMap;
         });
       } else {
         // For other connections, just add the edge
@@ -254,7 +330,7 @@ function FlowCanvas() {
   const handleMappingSave = useCallback(
     (config: PipelineConfig) => {
       const edgeId = `edge-${config.sourceNodeId}-${config.targetNodeId}`;
-      
+
       if (mappingPanel.pendingConnection) {
         // Creating new connection - Add the edge
         setEdges((eds) =>
@@ -420,6 +496,21 @@ function FlowCanvas() {
             destination: nodeData.destination,
           } as DestinationNodeData,
         };
+      } else if (nodeData.type === 'restDestination' && nodeData.restDestination) {
+        // Handle REST destination drop
+        newNode = {
+          id: generateNodeId(),
+          type: 'restDestination',
+          position,
+          data: {
+            label: nodeData.label,
+            description: nodeData.description,
+            category: 'restDestination',
+            icon: nodeData.icon,
+            restDestinationId: nodeData.restDestinationId!,
+            restDestination: nodeData.restDestination,
+          } as RestDestinationNodeData,
+        };
       } else {
         newNode = {
           id: generateNodeId(),
@@ -457,8 +548,16 @@ function FlowCanvas() {
     // Collect all pipeline configurations
     const pipelines = Array.from(pipelineConfigs.values()).map((config) => ({
       applicationId: config.applicationId,
-      destinationId: config.destinationId,
-      targetTable: config.targetTable,
+      destinationType: config.destinationType || 'database',
+      // Database destination fields
+      ...(config.destinationType !== 'rest' && {
+        destinationId: config.destinationId,
+        targetTable: config.targetTable,
+      }),
+      // REST destination fields
+      ...(config.destinationType === 'rest' && {
+        restDestinationId: config.restDestinationId,
+      }),
       isActive: true,
       fieldMappings: config.fieldMappings.map((fm) => ({
         sourceField: fm.sourceField,
@@ -478,7 +577,7 @@ function FlowCanvas() {
 
     try {
       let response;
-      
+
       if (isEditMode && workflowId) {
         // Update existing workflow
         response = await updateWorkflow(workflowId, {
@@ -700,8 +799,8 @@ function FlowCanvas() {
               <div
                 className={`
                   flex items-center gap-2 px-4 py-2 rounded-lg border backdrop-blur-sm
-                  ${saveStatus === 'success' 
-                    ? 'bg-green-900/50 border-green-700 text-green-300' 
+                  ${saveStatus === 'success'
+                    ? 'bg-green-900/50 border-green-700 text-green-300'
                     : 'bg-red-900/50 border-red-700 text-red-300'
                   }
                 `}

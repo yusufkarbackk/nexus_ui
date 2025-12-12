@@ -1,13 +1,14 @@
 import Link from 'next/link';
-import { 
-  Zap, 
-  ArrowRight, 
-  Workflow, 
-  Database, 
-  Filter, 
+import {
+  Zap,
+  ArrowRight,
+  Workflow,
+  Database,
+  Filter,
   Send,
   Settings,
   Plus,
+  Globe,
 } from 'lucide-react';
 
 export default function Home() {
@@ -39,6 +40,13 @@ export default function Home() {
                 Destinations
               </Link>
               <Link
+                href="/rest-destinations/list"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                REST APIs
+              </Link>
+              <Link
                 href="/workflow/list"
                 className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
               >
@@ -65,7 +73,7 @@ export default function Home() {
             <span className="text-indigo-400">Integrate Your Data</span>
           </h1>
           <p className="text-xl text-slate-400 mb-8">
-            Build powerful data pipelines with visual workflows. 
+            Build powerful data pipelines with visual workflows.
             No coding required, just drag, drop, and connect.
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
@@ -156,10 +164,29 @@ export default function Home() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-white group-hover:text-emerald-400 transition-colors text-sm">
-                    New Destination
+                    New DB Destination
                   </h3>
                   <p className="text-xs text-slate-400 truncate">
                     Add database
+                  </p>
+                </div>
+              </div>
+            </Link>
+
+            <Link
+              href="/rest-destinations"
+              className="group p-5 bg-slate-900 rounded-xl border border-slate-800 hover:border-orange-500/50 transition-all duration-200"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-orange-500/20 rounded-lg group-hover:bg-orange-500/30 transition-colors">
+                  <Globe className="w-5 h-5 text-orange-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-white group-hover:text-orange-400 transition-colors text-sm">
+                    New REST API
+                  </h3>
+                  <p className="text-xs text-slate-400 truncate">
+                    Add REST endpoint
                   </p>
                 </div>
               </div>

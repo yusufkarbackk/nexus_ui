@@ -406,10 +406,16 @@ export interface FieldMappingPayload {
   destinationColumn: string;
 }
 
+export type DestinationType = 'database' | 'rest';
+
 export interface PipelinePayload {
   applicationId: number;
-  destinationId: number;
-  targetTable: string;
+  destinationType: DestinationType;
+  // For database destinations
+  destinationId?: number;
+  targetTable?: string;
+  // For REST destinations
+  restDestinationId?: number;
   isActive: boolean;
   fieldMappings: FieldMappingPayload[];
 }
@@ -440,12 +446,17 @@ export interface Pipeline {
   id: number;
   workflowId: number;
   applicationId: number;
-  destinationId: number;
-  targetTable: string;
+  destinationType: DestinationType;
+  // For database destinations
+  destinationId?: number;
+  targetTable?: string;
+  destination?: Destination;
+  // For REST destinations
+  restDestinationId?: number;
+  restDestination?: RestDestination;
   isActive: boolean;
   fieldMappings: FieldMapping[];
   application?: Application;
-  destination?: Destination;
   createdAt: string;
   updatedAt: string;
 }
@@ -555,3 +566,184 @@ export async function deleteWorkflow(id: number): Promise<ApiResponse<null>> {
   return data;
 }
 
+// ============================================
+// REST Destination API Functions
+// ============================================
+
+export type HTTPMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type AuthType = 'none' | 'bearer' | 'api_key' | 'basic';
+
+export interface RestDestination {
+  id: number;
+  name: string;
+  description: string | null;
+  baseUrl: string;
+  method: HTTPMethod;
+  headers: string | null;  // JSON string
+  authType: AuthType;
+  timeoutSeconds: number;
+  status: 'up' | 'down';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RestDestinationListResponse {
+  success: boolean;
+  message: string;
+  data: RestDestination[];
+  total: number;
+}
+
+export interface CreateRestDestinationPayload {
+  name: string;
+  description?: string;
+  baseUrl: string;
+  method: HTTPMethod;
+  headers?: string;
+  authType: AuthType;
+  authConfig?: string;  // JSON string with auth details
+  timeoutSeconds?: number;
+}
+
+export interface UpdateRestDestinationPayload {
+  name?: string;
+  description?: string;
+  baseUrl?: string;
+  method?: HTTPMethod;
+  headers?: string;
+  authType?: AuthType;
+  authConfig?: string;
+  timeoutSeconds?: number;
+  status?: 'up' | 'down';
+}
+
+export interface TestRestConnectionPayload {
+  baseUrl: string;
+  method: HTTPMethod;
+  headers?: string;
+  authType: AuthType;
+  authConfig?: string;
+  timeoutSeconds?: number;
+  testPayload?: string;
+}
+
+export interface TestRestConnectionResponse {
+  success: boolean;
+  message: string;
+  statusCode?: number;
+  responseBody?: string;
+  latency?: string;
+}
+
+// Fetch all REST destinations
+export async function fetchRestDestinations(): Promise<RestDestinationListResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Fetch single REST destination by ID
+export async function fetchRestDestinationById(id: number): Promise<ApiResponse<RestDestination>> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// Create new REST destination
+export async function createRestDestination(payload: CreateRestDestinationPayload): Promise<ApiResponse<RestDestination>> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}
+
+// Update REST destination
+export async function updateRestDestination(id: number, payload: UpdateRestDestinationPayload): Promise<ApiResponse<RestDestination>> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}
+
+// Delete REST destination
+export async function deleteRestDestination(id: number): Promise<ApiResponse<null>> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}
+
+// Test REST endpoint connection
+export async function testRestConnection(payload: TestRestConnectionPayload): Promise<TestRestConnectionResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/test`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return response.json();
+}
+
+// Toggle REST destination status
+export async function toggleRestDestinationStatus(id: number): Promise<{ success: boolean; message: string; status: 'up' | 'down' }> {
+  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}/toggle`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  return response.json();
+}

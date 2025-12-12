@@ -1,7 +1,7 @@
 import { Node, Edge } from '@xyflow/react';
-import { Application, Destination } from '@/app/lib/api';
+import { Application, Destination, RestDestination } from '@/app/lib/api';
 
-export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'destination';
+export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'destination' | 'restDestination';
 
 // Base custom node data
 export interface CustomNodeData {
@@ -20,11 +20,18 @@ export interface SenderAppNodeData extends CustomNodeData {
   application: Application;
 }
 
-// Destination specific node data
+// Destination specific node data (Database)
 export interface DestinationNodeData extends CustomNodeData {
   category: 'destination';
   destinationId: number;
   destination: Destination;
+}
+
+// REST Destination specific node data
+export interface RestDestinationNodeData extends CustomNodeData {
+  category: 'restDestination';
+  restDestinationId: number;
+  restDestination: RestDestination;
 }
 
 // Pipeline configuration stored in edges
@@ -32,8 +39,12 @@ export interface PipelineConfig {
   sourceNodeId: string;
   targetNodeId: string;
   applicationId: number;
-  destinationId: number;
-  targetTable: string;
+  destinationType: 'database' | 'rest';
+  // For database destinations
+  destinationId?: number;
+  targetTable?: string;
+  // For REST destinations
+  restDestinationId?: number;
   fieldMappings: FieldMappingConfig[];
 }
 
@@ -61,10 +72,14 @@ export interface FieldMappingRequest {
   destinationColumn: string;
 }
 
+export type DestinationType = 'database' | 'rest';
+
 export interface PipelineRequest {
   applicationId: number;
-  destinationId: number;
-  targetTable: string;
+  destinationId?: number;       // For database destinations
+  targetTable?: string;         // For database destinations
+  destinationType: DestinationType;
+  restDestinationId?: number;   // For REST destinations
   isActive: boolean;
   fieldMappings: FieldMappingRequest[];
 }
@@ -136,6 +151,9 @@ export interface DraggableNodeItem {
   application?: Application;
   destinationId?: number;
   destination?: Destination;
+  // For REST destinations
+  restDestinationId?: number;
+  restDestination?: RestDestination;
 }
 
 export const nodeCategories: Record<NodeCategory, { color: string; bgColor: string; borderColor: string }> = {
@@ -163,6 +181,11 @@ export const nodeCategories: Record<NodeCategory, { color: string; bgColor: stri
     color: 'text-teal-600',
     bgColor: 'bg-teal-50',
     borderColor: 'border-teal-400',
+  },
+  restDestination: {
+    color: 'text-orange-600',
+    bgColor: 'bg-orange-50',
+    borderColor: 'border-orange-400',
   },
 };
 

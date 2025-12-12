@@ -24,8 +24,10 @@ import { draggableNodes } from '../data/initialData';
 import {
   fetchApplications,
   fetchDestinations,
+  fetchRestDestinations,
   Application,
   Destination,
+  RestDestination,
 } from '@/app/lib/api';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -67,6 +69,8 @@ function DraggableNode({ node }: { node: DraggableNodeItem }) {
         return 'bg-indigo-100';
       case 'destination':
         return 'bg-teal-100';
+      case 'restDestination':
+        return 'bg-orange-100';
       default:
         return 'bg-slate-100';
     }
@@ -102,8 +106,10 @@ function DraggableNode({ node }: { node: DraggableNodeItem }) {
 export function Sidebar({ className }: SidebarProps) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
+  const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [isLoadingDests, setIsLoadingDests] = useState(true);
+  const [isLoadingRestDests, setIsLoadingRestDests] = useState(true);
 
   const loadApplications = async () => {
     setIsLoadingApps(true);
@@ -129,9 +135,22 @@ export function Sidebar({ className }: SidebarProps) {
     }
   };
 
+  const loadRestDestinations = async () => {
+    setIsLoadingRestDests(true);
+    try {
+      const response = await fetchRestDestinations();
+      setRestDestinations(response.data);
+    } catch (error) {
+      console.error('Failed to load REST destinations:', error);
+    } finally {
+      setIsLoadingRestDests(false);
+    }
+  };
+
   useEffect(() => {
     loadApplications();
     loadDestinations();
+    loadRestDestinations();
   }, []);
 
   // Convert applications to draggable nodes
@@ -154,6 +173,17 @@ export function Sidebar({ className }: SidebarProps) {
     icon: dest.connectionType === 'postgresql' ? 'server' : 'database',
     destinationId: dest.id,
     destination: dest,
+  }));
+
+  // Convert REST destinations to draggable nodes
+  const restDestinationNodes: DraggableNodeItem[] = restDestinations.map((dest) => ({
+    type: 'restDestination',
+    label: dest.name,
+    description: `${dest.method} - ${dest.authType === 'none' ? 'No Auth' : dest.authType.replace('_', ' ')}`,
+    category: 'restDestination',
+    icon: 'globe',
+    restDestinationId: dest.id,
+    restDestination: dest,
   }));
 
   // Keep legacy nodes for triggers and logic
@@ -228,7 +258,7 @@ export function Sidebar({ className }: SidebarProps) {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-teal-500" />
               <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Destinations
+                DB Destinations
               </h3>
             </div>
             <button
@@ -256,6 +286,45 @@ export function Sidebar({ className }: SidebarProps) {
             ) : (
               <p className="text-xs text-slate-500 text-center py-2">
                 No destinations found
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* REST Destinations */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-orange-500" />
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                REST APIs
+              </h3>
+            </div>
+            <button
+              onClick={loadRestDestinations}
+              disabled={isLoadingRestDests}
+              className="p-1 hover:bg-slate-700 rounded transition-colors"
+              title="Refresh REST destinations"
+            >
+              {isLoadingRestDests ? (
+                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3 text-slate-500" />
+              )}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {isLoadingRestDests ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+              </div>
+            ) : restDestinationNodes.length > 0 ? (
+              restDestinationNodes.map((node) => (
+                <DraggableNode key={`rest-${node.restDestinationId}`} node={node} />
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-2">
+                No REST APIs configured
               </p>
             )}
           </div>
