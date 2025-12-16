@@ -1,0 +1,293 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model application_fields {
+  id                           BigInt                         @id @default(autoincrement()) @db.UnsignedBigInt
+  application_id               BigInt                         @db.UnsignedBigInt
+  name                         String                         @db.VarChar(255)
+  data_type                    application_fields_data_type
+  description                  String?                        @db.Text
+  created_at                   DateTime?                      @db.Timestamp(0)
+  updated_at                   DateTime?                      @db.Timestamp(0)
+  applications                 applications                   @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "application_fields_application_id_foreign")
+  database_field_subscriptions database_field_subscriptions[]
+
+  @@index([application_id], map: "application_fields_application_id_foreign")
+}
+
+model application_table_subscriptions {
+  id                           BigInt                         @id @default(autoincrement()) @db.UnsignedBigInt
+  application_id               BigInt                         @db.UnsignedBigInt
+  database_table_id            BigInt                         @db.UnsignedBigInt
+  consumer_group               String                         @db.VarChar(255)
+  created_at                   DateTime?                      @db.Timestamp(0)
+  updated_at                   DateTime?                      @db.Timestamp(0)
+  field_mappings               Json?
+  applications                 applications                   @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "application_table_subscriptions_application_id_foreign")
+  database_tables              database_tables                @relation(fields: [database_table_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "application_table_subscriptions_database_table_id_foreign")
+  database_field_subscriptions database_field_subscriptions[]
+
+  @@index([application_id], map: "application_table_subscriptions_application_id_foreign")
+  @@index([database_table_id], map: "application_table_subscriptions_database_table_id_foreign")
+}
+
+model applications {
+  id                              BigInt                            @id @default(autoincrement()) @db.UnsignedBigInt
+  name                            String                            @db.VarChar(255)
+  description                     String?                           @db.Text
+  app_key                         String                            @unique(map: "applications_api_key_unique") @db.VarChar(255)
+  created_at                      DateTime?                         @db.Timestamp(0)
+  updated_at                      DateTime?                         @db.Timestamp(0)
+  application_fields              application_fields[]
+  application_table_subscriptions application_table_subscriptions[]
+  pipelines                       pipelines[]
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model database_configs {
+  id              BigInt                           @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String                           @db.VarChar(255)
+  connection_type database_configs_connection_type
+  host            String                           @db.VarChar(255)
+  port            Int
+  database_name   String                           @db.VarChar(255)
+  username        String                           @db.VarChar(255)
+  password        String?                          @default("") @db.VarChar(255)
+  status          database_configs_status          @default(up)
+  created_at      DateTime?                        @db.Timestamp(0)
+  updated_at      DateTime?                        @db.Timestamp(0)
+  ssl_mode        String                           @default("disable") @db.VarChar(255)
+  connection_name String?                          @unique(map: "database_configs_connection_name_unique") @db.VarChar(255)
+  description     String?                          @db.VarChar(255)
+  database_tables database_tables[]
+  pipelines       pipelines[]
+}
+
+model database_field_subscriptions {
+  id                                BigInt                          @id @default(autoincrement()) @db.UnsignedBigInt
+  application_table_subscription_id BigInt                          @db.UnsignedBigInt
+  application_field_id              BigInt                          @db.UnsignedBigInt
+  mapped_to                         String                          @db.VarChar(255)
+  created_at                        DateTime?                       @db.Timestamp(0)
+  updated_at                        DateTime?                       @db.Timestamp(0)
+  default_value                     String?                         @db.VarChar(255)
+  application_fields                application_fields              @relation(fields: [application_field_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "database_field_subscriptions_application_field_id_foreign")
+  application_table_subscriptions   application_table_subscriptions @relation(fields: [application_table_subscription_id], references: [id], onDelete: Cascade, map: "fk_app_table_sub")
+
+  @@index([application_field_id], map: "database_field_subscriptions_application_field_id_foreign")
+  @@index([application_table_subscription_id], map: "fk_app_table_sub")
+}
+
+model database_tables {
+  id                              BigInt                            @id @default(autoincrement()) @db.UnsignedBigInt
+  database_config_id              BigInt                            @db.UnsignedBigInt
+  table_name                      String                            @db.VarChar(255)
+  created_at                      DateTime?                         @db.Timestamp(0)
+  updated_at                      DateTime?                         @db.Timestamp(0)
+  application_table_subscriptions application_table_subscriptions[]
+  database_configs                database_configs                  @relation(fields: [database_config_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "database_tables_database_config_id_foreign")
+  table_fields                    table_fields[]
+
+  @@index([database_config_id], map: "database_tables_database_config_id_foreign")
+}
+
+model failed_jobs {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  uuid       String   @unique(map: "failed_jobs_uuid_unique") @db.VarChar(255)
+  connection String   @db.Text
+  queue      String   @db.Text
+  payload    String   @db.LongText
+  exception  String   @db.LongText
+  failed_at  DateTime @default(now()) @db.Timestamp(0)
+}
+
+model field_mappings {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  pipeline_id        BigInt    @db.UnsignedBigInt
+  source_field       String    @db.VarChar(255)
+  destination_column String    @db.VarChar(255)
+  created_at         DateTime  @default(now()) @db.Timestamp(0)
+  pipelines          pipelines @relation(fields: [pipeline_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "field_mappings_pipeline_id_foreign")
+
+  @@index([pipeline_id], map: "field_mappings_pipeline_id_foreign")
+}
+
+model logs {
+  id            BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  data_id       String?    @db.VarChar(255)
+  source        String     @db.VarChar(255)
+  destination   String     @db.VarChar(255)
+  host          String     @default("") @db.VarChar(255)
+  data_sent     Json
+  data_received Json?
+  sent_at       DateTime?  @db.Timestamp(0)
+  received_at   DateTime?  @db.Timestamp(0)
+  message       String     @default("") @db.VarChar(255)
+  status        String     @default("pending") @db.VarChar(255)
+  retry_count   Int        @default(0)
+  workflow_id   BigInt?    @db.UnsignedBigInt
+  created_at    DateTime?  @db.Timestamp(0)
+  updated_at    DateTime?  @db.Timestamp(0)
+  workflows     workflows? @relation(fields: [workflow_id], references: [id], onDelete: SetNull)
+
+  @@index([data_id], map: "logs_data_id_index")
+  @@index([status], map: "logs_status_index")
+  @@index([created_at], map: "logs_created_at_index")
+  @@index([workflow_id], map: "logs_workflow_id_index")
+}
+
+model migrations {
+  id        Int    @id @default(autoincrement()) @db.UnsignedInt
+  migration String @db.VarChar(255)
+  batch     Int
+}
+
+model password_reset_tokens {
+  email      String    @id @db.VarChar(255)
+  token      String    @db.VarChar(255)
+  created_at DateTime? @db.Timestamp(0)
+}
+
+model personal_access_tokens {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  tokenable_type String    @db.VarChar(255)
+  tokenable_id   BigInt    @db.UnsignedBigInt
+  name           String    @db.VarChar(255)
+  token          String    @unique(map: "personal_access_tokens_token_unique") @db.VarChar(64)
+  abilities      String?   @db.Text
+  last_used_at   DateTime? @db.Timestamp(0)
+  expires_at     DateTime? @db.Timestamp(0)
+  created_at     DateTime? @db.Timestamp(0)
+  updated_at     DateTime? @db.Timestamp(0)
+
+  @@index([tokenable_type, tokenable_id], map: "personal_access_tokens_tokenable_type_tokenable_id_index")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model pipelines {
+  id                  BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
+  workflow_id         BigInt                     @db.UnsignedBigInt
+  application_id      BigInt                     @db.UnsignedBigInt
+  database_configs_id BigInt?                    @db.UnsignedBigInt
+  target_table        String?                    @db.VarChar(255)
+  destination_type    pipelines_destination_type @default(database)
+  rest_destination_id BigInt?                    @db.UnsignedBigInt
+  is_active           Boolean                    @default(true)
+  created_at          DateTime?                  @db.Timestamp(0)
+  updated_at          DateTime?                  @db.Timestamp(0)
+  field_mappings      field_mappings[]
+  rest_destinations   rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
+  applications        applications               @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
+  database_configs    database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
+  workflows           workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
+
+  @@index([rest_destination_id], map: "fk_pipelines_rest_destination")
+  @@index([application_id], map: "pipelines_application_id_foreign")
+  @@index([database_configs_id], map: "pipelines_database_configs_id_foreign")
+  @@index([workflow_id], map: "pipelines_workflow_id_foreign")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model rest_destinations {
+  id              BigInt                      @id @default(autoincrement()) @db.UnsignedBigInt
+  name            String                      @unique(map: "rest_destinations_name_unique") @db.VarChar(255)
+  description     String?                     @db.Text
+  base_url        String                      @db.VarChar(500)
+  method          rest_destinations_method    @default(POST)
+  headers         Json?
+  auth_type       rest_destinations_auth_type @default(none)
+  auth_config     String?                     @db.Text
+  timeout_seconds Int                         @default(30)
+  status          rest_destinations_status    @default(up)
+  created_at      DateTime?                   @db.Timestamp(0)
+  updated_at      DateTime?                   @db.Timestamp(0)
+  pipelines       pipelines[]
+
+  @@index([auth_type], map: "idx_auth_type")
+  @@index([status], map: "idx_status")
+}
+
+model table_fields {
+  id              BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  table_id        BigInt          @db.UnsignedBigInt
+  name            String          @db.VarChar(255)
+  data_type       String          @db.VarChar(255)
+  created_at      DateTime?       @db.Timestamp(0)
+  updated_at      DateTime?       @db.Timestamp(0)
+  database_tables database_tables @relation(fields: [table_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "table_fields_table_id_foreign")
+
+  @@index([table_id], map: "table_fields_table_id_foreign")
+}
+
+model users {
+  id                BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name              String    @db.VarChar(255)
+  email             String    @unique(map: "users_email_unique") @db.VarChar(255)
+  email_verified_at DateTime? @db.Timestamp(0)
+  password          String    @db.VarChar(255)
+  remember_token    String?   @db.VarChar(100)
+  created_at        DateTime? @db.Timestamp(0)
+  updated_at        DateTime? @db.Timestamp(0)
+}
+
+model workflows {
+  id                        BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  name                      String      @db.VarChar(255)
+  description               String?     @db.Text
+  is_active                 Boolean     @default(true)
+  redis_retention_hours     Int         @default(168) // For failed messages
+  delete_failed_immediately Boolean     @default(false) // true = discard failures immediately
+  created_at                DateTime?   @db.Timestamp(0)
+  updated_at                DateTime?   @db.Timestamp(0)
+  pipelines                 pipelines[]
+  logs                      logs[]
+}
+
+enum database_configs_connection_type {
+  mysql
+  pgsql
+  postgresql
+}
+
+enum application_fields_data_type {
+  string
+  number
+  boolean
+  json
+}
+
+enum rest_destinations_method {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+enum pipelines_destination_type {
+  database
+  rest
+}
+
+enum rest_destinations_auth_type {
+  none
+  bearer
+  api_key
+  basic
+}
+
+enum database_configs_status {
+  up
+  down
+}
+
+enum rest_destinations_status {
+  up
+  down
+}

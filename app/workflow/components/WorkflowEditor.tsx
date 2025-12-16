@@ -73,6 +73,8 @@ function FlowCanvas() {
   const [workflowId, setWorkflowId] = useState<number | null>(null);
   const [workflowName, setWorkflowName] = useState('New Workflow');
   const [workflowDescription, setWorkflowDescription] = useState('');
+  const [retentionHours, setRetentionHours] = useState(168); // Default 7 days
+  const [deleteFailedImmediately, setDeleteFailedImmediately] = useState(false);
   const [pipelineConfigs, setPipelineConfigs] = useState<Map<string, PipelineConfig>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +105,8 @@ function FlowCanvas() {
           setWorkflowId(workflow.id);
           setWorkflowName(workflow.name);
           setWorkflowDescription(workflow.description || '');
+          setRetentionHours(workflow.redisRetentionHours || 168);
+          setDeleteFailedImmediately(workflow.deleteFailedImmediately || false);
 
           // Reconstruct nodes and edges from pipelines
           const newNodes: WorkflowNode[] = [];
@@ -584,6 +588,8 @@ function FlowCanvas() {
           name: workflowName,
           description: workflowDescription || undefined,
           isActive: true,
+          redisRetentionHours: retentionHours,
+          deleteFailedImmediately: deleteFailedImmediately,
           pipelines,
         });
 
@@ -600,6 +606,8 @@ function FlowCanvas() {
           name: workflowName,
           description: workflowDescription || undefined,
           isActive: true,
+          redisRetentionHours: retentionHours,
+          deleteFailedImmediately: deleteFailedImmediately,
           pipelines,
         });
 
@@ -780,9 +788,9 @@ function FlowCanvas() {
             </div>
           </Panel>
 
-          {/* Workflow Name */}
+          {/* Workflow Name & Settings */}
           <Panel position="top-left" className="ml-4 mt-4">
-            <div className="bg-slate-800/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700">
+            <div className="bg-slate-800/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700 flex items-center gap-4">
               <input
                 type="text"
                 value={workflowName}
@@ -790,6 +798,33 @@ function FlowCanvas() {
                 className="bg-transparent text-white font-semibold text-lg outline-none border-none focus:ring-0"
                 placeholder="Workflow name..."
               />
+              <div className="w-px h-6 bg-slate-600" />
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={deleteFailedImmediately}
+                    onChange={(e) => setDeleteFailedImmediately(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+                  />
+                  <span className="text-xs text-slate-400">Delete failed immediately</span>
+                </label>
+                {!deleteFailedImmediately && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">|</span>
+                    <span className="text-xs text-slate-400">Retention:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={retentionHours}
+                      onChange={(e) => setRetentionHours(parseInt(e.target.value) || 168)}
+                      className="w-16 px-2 py-1 bg-slate-700 text-white text-sm rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
+                      title="Hours to keep failed messages"
+                    />
+                    <span className="text-xs text-slate-400">hrs</span>
+                  </div>
+                )}
+              </div>
             </div>
           </Panel>
 

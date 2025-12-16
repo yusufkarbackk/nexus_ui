@@ -424,6 +424,8 @@ export interface CreateWorkflowPayload {
   name: string;
   description?: string;
   isActive: boolean;
+  redisRetentionHours?: number;
+  deleteFailedImmediately?: boolean;
   pipelines: PipelinePayload[];
 }
 
@@ -431,6 +433,8 @@ export interface UpdateWorkflowPayload {
   name?: string;
   description?: string;
   isActive?: boolean;
+  redisRetentionHours?: number;
+  deleteFailedImmediately?: boolean;
   pipelines?: PipelinePayload[];
 }
 
@@ -466,6 +470,8 @@ export interface Workflow {
   name: string;
   description?: string;
   isActive: boolean;
+  redisRetentionHours?: number;
+  deleteFailedImmediately?: boolean;
   pipelines: Pipeline[];
   createdAt: string;
   updatedAt: string;
