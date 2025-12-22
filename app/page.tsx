@@ -10,6 +10,8 @@ import {
   Plus,
   Globe,
   ScrollText,
+  Wifi,
+  BookOpen,
 } from 'lucide-react';
 
 export default function Home() {
@@ -32,6 +34,13 @@ export default function Home() {
               >
                 <Send className="w-4 h-4" />
                 Sources
+              </Link>
+              <Link
+                href="/mqtt-sources"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <Wifi className="w-4 h-4" />
+                MQTT
               </Link>
               <Link
                 href="/destinations/list"
@@ -60,6 +69,13 @@ export default function Home() {
               >
                 <ScrollText className="w-4 h-4" />
                 Logs
+              </Link>
+              <Link
+                href="/docs"
+                className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <BookOpen className="w-4 h-4" />
+                Docs
               </Link>
               <Link
                 href="/workflow"

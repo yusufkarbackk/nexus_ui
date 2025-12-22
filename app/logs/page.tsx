@@ -144,6 +144,13 @@ export default function LogsPage() {
                 </span>
             );
         }
+        if (status === 'DROPPED') {
+            return (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-slate-500/20 text-slate-400">
+                    <XCircle className="w-3 h-3" /> Dropped
+                </span>
+            );
+        }
         if (status === 'RETRY' || retryCount > 0) {
             return (
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
@@ -262,6 +269,7 @@ export default function LogsPage() {
                             <option value="SUCCESS">Success</option>
                             <option value="FAILED">Failed</option>
                             <option value="RETRY">Retry</option>
+                            <option value="DROPPED">Dropped</option>
                             <option value="PENDING">Pending</option>
                         </select>
                         <input

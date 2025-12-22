@@ -42,6 +42,9 @@ model applications {
   name                            String                            @db.VarChar(255)
   description                     String?                           @db.Text
   app_key                         String                            @unique(map: "applications_api_key_unique") @db.VarChar(255)
+  master_secret_encrypted         String?                           @db.VarChar(500) // Encrypted with NEXUS_ENCRYPTION_KEY
+  encryption_enabled              Boolean                           @default(false)
+  secret_version                  Int                               @default(1) // For key rotation
   created_at                      DateTime?                         @db.Timestamp(0)
   updated_at                      DateTime?                         @db.Timestamp(0)
   application_fields              application_fields[]
@@ -237,16 +240,67 @@ model users {
 }
 
 model workflows {
-  id                        BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
-  name                      String      @db.VarChar(255)
-  description               String?     @db.Text
-  is_active                 Boolean     @default(true)
-  redis_retention_hours     Int         @default(168) // For failed messages
-  delete_failed_immediately Boolean     @default(false) // true = discard failures immediately
-  created_at                DateTime?   @db.Timestamp(0)
-  updated_at                DateTime?   @db.Timestamp(0)
+  id                        BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  name                      String               @db.VarChar(255)
+  description               String?              @db.Text
+  is_active                 Boolean              @default(true)
+  redis_retention_hours     Float                @default(168) // Supports decimals like 0.5 hours
+  delete_failed_immediately Boolean              @default(false) // true = discard failures immediately
+  created_at                DateTime?            @db.Timestamp(0)
+  updated_at                DateTime?            @db.Timestamp(0)
   pipelines                 pipelines[]
   logs                      logs[]
+  mqtt_subscriptions        mqtt_subscriptions[]
+}
+
+/// MQTT broker connection configuration
+model mqtt_sources {
+  id                 BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  name               String               @db.VarChar(255)
+  description        String?              @db.Text
+  broker_url         String               @db.VarChar(500) // tcp://broker.example.com:1883
+  username           String?              @db.VarChar(255)
+  password_encrypted String?              @db.VarChar(500) // Encrypted password
+  client_id          String?              @db.VarChar(255)
+  use_tls            Boolean              @default(false)
+  ca_cert            String?              @db.Text // For TLS certificate
+  is_active          Boolean              @default(true)
+  status             mqtt_sources_status  @default(disconnected)
+  created_at         DateTime?            @db.Timestamp(0)
+  updated_at         DateTime?            @db.Timestamp(0)
+  mqtt_subscriptions mqtt_subscriptions[]
+
+  @@index([is_active], map: "mqtt_sources_is_active_index")
+}
+
+/// Topic subscription linking MQTT source to workflow
+model mqtt_subscriptions {
+  id             BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
+  mqtt_source_id BigInt                    @db.UnsignedBigInt
+  workflow_id    BigInt                    @db.UnsignedBigInt
+  topic_pattern  String                    @db.VarChar(500) // sensor/+/temperature or device/#
+  qos            Int                       @default(0) @db.TinyInt // 0, 1, or 2
+  payload_format mqtt_subscriptions_format @default(json)
+  is_active      Boolean                   @default(true)
+  created_at     DateTime?                 @db.Timestamp(0)
+  mqtt_sources   mqtt_sources              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade)
+  workflows      workflows                 @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+
+  @@unique([mqtt_source_id, topic_pattern, workflow_id], map: "unique_topic_workflow")
+  @@index([mqtt_source_id], map: "mqtt_subscriptions_source_id_index")
+  @@index([workflow_id], map: "mqtt_subscriptions_workflow_id_index")
+}
+
+enum mqtt_sources_status {
+  connected
+  disconnected
+  error
+}
+
+enum mqtt_subscriptions_format {
+  json
+  raw
+  csv
 }
 
 enum database_configs_connection_type {

@@ -815,11 +815,15 @@ function FlowCanvas() {
                     <span className="text-xs text-slate-400">Retention:</span>
                     <input
                       type="number"
-                      min={1}
+                      min={0.1}
+                      step={0.1}
                       value={retentionHours}
-                      onChange={(e) => setRetentionHours(parseInt(e.target.value) || 168)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setRetentionHours(isNaN(val) ? 168 : val);
+                      }}
                       className="w-16 px-2 py-1 bg-slate-700 text-white text-sm rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
-                      title="Hours to keep failed messages"
+                      title="Hours to keep failed messages (e.g., 0.5 = 30 minutes)"
                     />
                     <span className="text-xs text-slate-400">hrs</span>
                   </div>

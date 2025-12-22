@@ -2,11 +2,11 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { 
-  RefreshCw, 
-  Plus, 
-  Copy, 
-  Check, 
+import {
+  RefreshCw,
+  Plus,
+  Copy,
+  Check,
   Save,
   ArrowLeft,
   Zap,
@@ -14,6 +14,10 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
+  Shield,
+  Key,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import { DataField } from '../types/senderAppTypes';
@@ -26,7 +30,7 @@ export function SenderAppForm() {
   const searchParams = useSearchParams();
   const editId = searchParams.get('id');
   const isEditMode = !!editId;
-  
+
   const [appName, setAppName] = useState('');
   const [appDescription, setAppDescription] = useState('');
   const [appId, setAppId] = useState(() => generateAppId());
@@ -36,15 +40,19 @@ export function SenderAppForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
+  const [masterSecret, setMasterSecret] = useState<string | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
+  const [secretCopied, setSecretCopied] = useState(false);
 
   // Load existing application data when in edit mode
   useEffect(() => {
     async function loadApplication() {
       if (!editId) return;
-      
+
       setIsLoading(true);
       setError(null);
-      
+
       try {
         const response = await fetchApplicationById(parseInt(editId));
         if (response.success && response.data) {
@@ -52,7 +60,7 @@ export function SenderAppForm() {
           setAppName(app.name);
           setAppDescription(app.description || '');
           setAppId(app.appKey);
-          
+
           // Convert fields to DataField format
           if (app.fields && app.fields.length > 0) {
             const fields: DataField[] = app.fields.map((field) => ({
@@ -73,7 +81,7 @@ export function SenderAppForm() {
         setIsLoading(false);
       }
     }
-    
+
     loadApplication();
   }, [editId]);
 
@@ -124,7 +132,7 @@ export function SenderAppForm() {
         }));
 
       let response;
-      
+
       if (isEditMode && editId) {
         // Update existing application
         response = await updateApplication(parseInt(editId), {
@@ -132,7 +140,7 @@ export function SenderAppForm() {
           description: appDescription || undefined,
           fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
         });
-        
+
         if (response.success) {
           setSuccess('Sender App updated successfully!');
           setTimeout(() => {
@@ -147,14 +155,21 @@ export function SenderAppForm() {
           name: appName,
           description: appDescription || undefined,
           appKey: appId,
+          encryptionEnabled: encryptionEnabled,
           fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
         });
 
         if (response.success) {
-          setSuccess('Sender App created successfully!');
-          setTimeout(() => {
-            router.push('/sender-apps/list');
-          }, 1500);
+          // If encryption was enabled, show the master secret
+          if (encryptionEnabled && response.data?.masterSecret) {
+            setMasterSecret(response.data.masterSecret);
+            setSuccess('Sender App created! IMPORTANT: Copy your Master Secret below - it will only be shown once!');
+          } else {
+            setSuccess('Sender App created successfully!');
+            setTimeout(() => {
+              router.push('/sender-apps/list');
+            }, 1500);
+          }
         } else {
           setError(response.message || 'Failed to create application');
         }
@@ -247,161 +262,247 @@ export function SenderAppForm() {
         )}
 
         {!isLoading && (
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {/* App ID Section */}
-          <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <div className="flex items-start gap-4">
-              <div className="p-3 bg-emerald-500/20 rounded-lg">
-                <Info className="w-5 h-5 text-emerald-400" />
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* App ID Section */}
+            <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-emerald-500/20 rounded-lg">
+                  <Info className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div className="flex-1">
+                  <h2 className="text-lg font-semibold text-white mb-1">App Identifier (API Key)</h2>
+                  <p className="text-sm text-slate-400 mb-4">
+                    This unique key will be used to authenticate API calls. Include it as <code className="text-emerald-400 bg-slate-800 px-1 rounded">X-API-Key</code> header.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 flex items-center bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
+                      <code className="flex-1 px-4 py-3 text-emerald-400 font-mono text-sm">
+                        {appId}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={copyAppId}
+                        className="px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-700"
+                        title="Copy to clipboard"
+                      >
+                        {copied ? (
+                          <Check className="w-4 h-4 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </button>
+                    </div>
+                    {!isEditMode && (
+                      <button
+                        type="button"
+                        onClick={regenerateAppId}
+                        className="flex items-center gap-2 px-4 py-3 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
+                        title="Generate new ID"
+                      >
+                        <RefreshCw className="w-4 h-4" />
+                        <span className="text-sm">Regenerate</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-white mb-1">App Identifier (API Key)</h2>
-                <p className="text-sm text-slate-400 mb-4">
-                  This unique key will be used to authenticate API calls. Include it as <code className="text-emerald-400 bg-slate-800 px-1 rounded">X-API-Key</code> header.
-                </p>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 flex items-center bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-                    <code className="flex-1 px-4 py-3 text-emerald-400 font-mono text-sm">
-                      {appId}
-                    </code>
+            </section>
+
+            {/* Basic Info Section */}
+            <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-6">Basic Information</h2>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="appName" className="block text-sm font-medium text-slate-300 mb-2">
+                    App Name <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    id="appName"
+                    type="text"
+                    value={appName}
+                    onChange={(e) => setAppName(e.target.value)}
+                    placeholder="e.g., Customer CRM System"
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="appDescription" className="block text-sm font-medium text-slate-300 mb-2">
+                    Description
+                  </label>
+                  <textarea
+                    id="appDescription"
+                    value={appDescription}
+                    onChange={(e) => setAppDescription(e.target.value)}
+                    placeholder="Describe what this sender app does..."
+                    rows={3}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Encryption Section */}
+            {!isEditMode && (
+              <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-amber-500/20 rounded-lg">
+                    <Shield className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-lg font-semibold text-white">End-to-End Encryption</h2>
+                        <p className="text-sm text-slate-400 mt-1">
+                          Encrypt data with daily rotating keys (Enigma-style)
+                        </p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={encryptionEnabled}
+                          onChange={(e) => setEncryptionEnabled(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+
+                    {encryptionEnabled && (
+                      <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                        <p className="text-amber-400 text-sm">
+                          <strong>⚠️ Important:</strong> After creating, you will receive a Master Secret.
+                          Copy it immediately - it will only be shown once! You&apos;ll need it to encrypt data using our SDK.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Master Secret Display (after creation) */}
+            {masterSecret && (
+              <section className="bg-slate-900 rounded-xl border-2 border-amber-500 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-amber-500/20 rounded-lg">
+                    <Key className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div className="flex-1">
+                    <h2 className="text-lg font-semibold text-white mb-2">🔐 Your Master Secret</h2>
+                    <p className="text-sm text-amber-400 mb-4">
+                      Copy this now! It will NOT be shown again.
+                    </p>
+                    <div className="flex items-center gap-2 bg-slate-800 rounded-lg border border-slate-700 p-3">
+                      <code className="flex-1 text-emerald-400 font-mono text-sm break-all">
+                        {showSecret ? masterSecret : '•'.repeat(40)}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecret(!showSecret)}
+                        className="p-2 text-slate-400 hover:text-white transition-colors"
+                      >
+                        {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await navigator.clipboard.writeText(masterSecret);
+                          setSecretCopied(true);
+                          setTimeout(() => setSecretCopied(false), 2000);
+                        }}
+                        className="p-2 text-slate-400 hover:text-white transition-colors"
+                      >
+                        {secretCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      </button>
+                    </div>
                     <button
                       type="button"
-                      onClick={copyAppId}
-                      className="px-4 py-3 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border-l border-slate-700"
-                      title="Copy to clipboard"
+                      onClick={() => router.push('/sender-apps/list')}
+                      className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
                     >
-                      {copied ? (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      ) : (
-                        <Copy className="w-4 h-4" />
-                      )}
+                      I&apos;ve copied it, continue →
                     </button>
                   </div>
-                  {!isEditMode && (
-                    <button
-                      type="button"
-                      onClick={regenerateAppId}
-                      className="flex items-center gap-2 px-4 py-3 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-lg border border-slate-700 transition-colors"
-                      title="Generate new ID"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                      <span className="text-sm">Regenerate</span>
-                    </button>
-                  )}
                 </div>
-              </div>
-            </div>
-          </section>
+              </section>
+            )}
 
-          {/* Basic Info Section */}
-          <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <h2 className="text-lg font-semibold text-white mb-6">Basic Information</h2>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="appName" className="block text-sm font-medium text-slate-300 mb-2">
-                  App Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  id="appName"
-                  type="text"
-                  value={appName}
-                  onChange={(e) => setAppName(e.target.value)}
-                  placeholder="e.g., Customer CRM System"
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label htmlFor="appDescription" className="block text-sm font-medium text-slate-300 mb-2">
-                  Description
-                </label>
-                <textarea
-                  id="appDescription"
-                  value={appDescription}
-                  onChange={(e) => setAppDescription(e.target.value)}
-                  placeholder="Describe what this sender app does..."
-                  rows={3}
-                  className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none"
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Data Fields Section */}
-          <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Data Schema</h2>
-                <p className="text-sm text-slate-400 mt-1">
-                  Define the fields that this app will send (saved to database)
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={addDataField}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Field
-              </button>
-            </div>
-
-            {dataFields.length === 0 ? (
-              <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-lg">
-                <div className="p-3 bg-slate-800 rounded-full w-fit mx-auto mb-4">
-                  <Plus className="w-6 h-6 text-slate-500" />
+            {/* Data Fields Section */}
+            <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Data Schema</h2>
+                  <p className="text-sm text-slate-400 mt-1">
+                    Define the fields that this app will send (saved to database)
+                  </p>
                 </div>
-                <h3 className="text-white font-medium mb-1">No fields defined</h3>
-                <p className="text-sm text-slate-400 mb-4">
-                  Add fields to define the data structure your app will send
-                </p>
                 <button
                   type="button"
                   onClick={addDataField}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
                 >
                   <Plus className="w-4 h-4" />
-                  Add First Field
+                  Add Field
                 </button>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {dataFields.map((field) => (
-                  <DataFieldRow
-                    key={field.id}
-                    field={field}
-                    onUpdate={updateDataField}
-                    onRemove={removeDataField}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
 
-          {/* API Usage Example */}
-          <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-            <h2 className="text-lg font-semibold text-white mb-4">API Usage Example</h2>
-            <p className="text-sm text-slate-400 mb-4">
-              Use this example to send data to the Nexus Gateway ingress endpoint:
-            </p>
-            <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 overflow-x-auto">
-              <code className="text-sm text-slate-300">
-{`curl -X POST http://localhost:8080/ingress \\
+              {dataFields.length === 0 ? (
+                <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-lg">
+                  <div className="p-3 bg-slate-800 rounded-full w-fit mx-auto mb-4">
+                    <Plus className="w-6 h-6 text-slate-500" />
+                  </div>
+                  <h3 className="text-white font-medium mb-1">No fields defined</h3>
+                  <p className="text-sm text-slate-400 mb-4">
+                    Add fields to define the data structure your app will send
+                  </p>
+                  <button
+                    type="button"
+                    onClick={addDataField}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add First Field
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {dataFields.map((field) => (
+                    <DataFieldRow
+                      key={field.id}
+                      field={field}
+                      onUpdate={updateDataField}
+                      onRemove={removeDataField}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* API Usage Example */}
+            <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-4">API Usage Example</h2>
+              <p className="text-sm text-slate-400 mb-4">
+                Use this example to send data to the Nexus Gateway ingress endpoint:
+              </p>
+              <pre className="bg-slate-950 border border-slate-800 rounded-lg p-4 overflow-x-auto">
+                <code className="text-sm text-slate-300">
+                  {`curl -X POST http://localhost:8080/ingress \\
   -H "Content-Type: application/json" \\
   -H "X-API-Key: ${appId}" \\
   -d '${JSON.stringify(
-    dataFields.length > 0
-      ? dataFields.reduce((acc, field) => {
-          acc[field.name || 'field_name'] = getExampleValue(field.type);
-          return acc;
-        }, {} as Record<string, unknown>)
-      : { key: 'value', example: 'data' },
-    null,
-    2
-  )}'`}
-              </code>
-            </pre>
-          </section>
-        </form>
+                    dataFields.length > 0
+                      ? dataFields.reduce((acc, field) => {
+                        acc[field.name || 'field_name'] = getExampleValue(field.type);
+                        return acc;
+                      }, {} as Record<string, unknown>)
+                      : { key: 'value', example: 'data' },
+                    null,
+                    2
+                  )}'`}
+                </code>
+              </pre>
+            </section>
+          </form>
         )}
       </main>
     </div>

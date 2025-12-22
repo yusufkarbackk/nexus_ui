@@ -29,6 +29,9 @@ export interface Application {
   name: string;
   description: string | null;
   appKey: string;
+  encryptionEnabled?: boolean;
+  secretVersion?: number;
+  masterSecret?: string; // Only returned on create
   fields: ApplicationField[];
   createdAt: string;
   updatedAt: string;
@@ -45,6 +48,7 @@ export interface CreateApplicationPayload {
   name: string;
   description?: string;
   appKey: string;
+  encryptionEnabled?: boolean;
   fields?: ApplicationFieldPayload[];
 }
 
