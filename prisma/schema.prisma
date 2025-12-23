@@ -255,22 +255,40 @@ model workflows {
 
 /// MQTT broker connection configuration
 model mqtt_sources {
-  id                 BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
-  name               String               @db.VarChar(255)
-  description        String?              @db.Text
-  broker_url         String               @db.VarChar(500) // tcp://broker.example.com:1883
-  username           String?              @db.VarChar(255)
-  password_encrypted String?              @db.VarChar(500) // Encrypted password
-  client_id          String?              @db.VarChar(255)
-  use_tls            Boolean              @default(false)
-  ca_cert            String?              @db.Text // For TLS certificate
-  is_active          Boolean              @default(true)
-  status             mqtt_sources_status  @default(disconnected)
-  created_at         DateTime?            @db.Timestamp(0)
-  updated_at         DateTime?            @db.Timestamp(0)
-  mqtt_subscriptions mqtt_subscriptions[]
+  id                      BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
+  name                    String               @db.VarChar(255)
+  description             String?              @db.Text
+  broker_url              String               @db.VarChar(500) // tcp://broker.example.com:1883
+  username                String?              @db.VarChar(255)
+  password_encrypted      String?              @db.VarChar(500) // Encrypted password
+  client_id               String?              @db.VarChar(255)
+  use_tls                 Boolean              @default(false)
+  ca_cert                 String?              @db.Text // For TLS certificate
+  encryption_enabled      Boolean              @default(false) // Enable Enigma encryption
+  master_secret_encrypted String?              @db.VarChar(500) // Master secret for decryption
+  secret_version          Int                  @default(1) // For key rotation
+  is_active               Boolean              @default(true)
+  status                  mqtt_sources_status  @default(disconnected)
+  created_at              DateTime?            @db.Timestamp(0)
+  updated_at              DateTime?            @db.Timestamp(0)
+  mqtt_subscriptions      mqtt_subscriptions[]
+  mqtt_source_fields      mqtt_source_fields[]
 
   @@index([is_active], map: "mqtt_sources_is_active_index")
+}
+
+/// Field definitions for MQTT sources (like sender app fields)
+model mqtt_source_fields {
+  id             BigInt                       @id @default(autoincrement()) @db.UnsignedBigInt
+  mqtt_source_id BigInt                       @db.UnsignedBigInt
+  name           String                       @db.VarChar(255)
+  data_type      mqtt_source_fields_data_type @default(string)
+  description    String?                      @db.Text
+  created_at     DateTime?                    @db.Timestamp(0)
+  updated_at     DateTime?                    @db.Timestamp(0)
+  mqtt_sources   mqtt_sources                 @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade)
+
+  @@index([mqtt_source_id], map: "mqtt_source_fields_mqtt_source_id_index")
 }
 
 /// Topic subscription linking MQTT source to workflow
@@ -310,6 +328,13 @@ enum database_configs_connection_type {
 }
 
 enum application_fields_data_type {
+  string
+  number
+  boolean
+  json
+}
+
+enum mqtt_source_fields_data_type {
   string
   number
   boolean

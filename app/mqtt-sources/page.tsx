@@ -12,7 +12,10 @@ import {
     CheckCircle,
     XCircle,
     Link2,
-    Settings
+    Settings,
+    Lock,
+    Copy,
+    Key
 } from 'lucide-react';
 
 interface MQTTSource {
@@ -23,6 +26,9 @@ interface MQTTSource {
     username?: string;
     clientId?: string;
     useTls: boolean;
+    encryptionEnabled: boolean;
+    masterSecret?: string; // One-time reveal
+    secretVersion: number;
     isActive: boolean;
     status: 'connected' | 'disconnected' | 'error';
     subscriptions?: MQTTSubscription[];
@@ -55,6 +61,9 @@ export default function MQTTSourcesPage() {
     const [showModal, setShowModal] = useState(false);
     const [showSubModal, setShowSubModal] = useState(false);
     const [testingId, setTestingId] = useState<number | null>(null);
+    const [showSecretModal, setShowSecretModal] = useState(false);
+    const [newMasterSecret, setNewMasterSecret] = useState<string | null>(null);
+    const [copiedSecret, setCopiedSecret] = useState(false);
 
     // Form state for source
     const [formData, setFormData] = useState({
@@ -65,6 +74,7 @@ export default function MQTTSourcesPage() {
         password: '',
         clientId: '',
         useTls: false,
+        encryptionEnabled: false,
         isActive: true
     });
 
@@ -120,6 +130,13 @@ export default function MQTTSourcesPage() {
             if (data.success) {
                 setShowModal(false);
                 fetchSources();
+
+                // If encryption was enabled, show the master secret (one-time)
+                if (data.data?.masterSecret) {
+                    setNewMasterSecret(data.data.masterSecret);
+                    setShowSecretModal(true);
+                }
+
                 resetForm();
             } else {
                 alert('Error: ' + data.message);
@@ -243,8 +260,19 @@ export default function MQTTSourcesPage() {
             password: '',
             clientId: '',
             useTls: false,
+            encryptionEnabled: false,
             isActive: true
         });
+    };
+
+    const copyToClipboard = async (text: string) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopiedSecret(true);
+            setTimeout(() => setCopiedSecret(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy:', err);
+        }
     };
 
     const openEditModal = (source: MQTTSource) => {
@@ -350,6 +378,11 @@ export default function MQTTSourcesPage() {
                                     </span>
                                     {source.useTls && (
                                         <span className="px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">TLS</span>
+                                    )}
+                                    {source.encryptionEnabled && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-amber-500/20 text-amber-400">
+                                            <Lock className="w-3 h-3" /> Encrypted
+                                        </span>
                                     )}
                                 </div>
 
@@ -538,6 +571,29 @@ export default function MQTTSourcesPage() {
                                         <span className="text-sm text-slate-300">Active</span>
                                     </label>
                                 </div>
+
+                                {/* Encryption toggle - only shown for new sources */}
+                                {!selectedSource && (
+                                    <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.encryptionEnabled}
+                                                onChange={(e) => setFormData({ ...formData, encryptionEnabled: e.target.checked })}
+                                                className="w-4 h-4 rounded accent-amber-500"
+                                            />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <Lock className="w-4 h-4 text-amber-400" />
+                                                    <span className="text-sm font-medium text-slate-200">Enable Encryption</span>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-1">
+                                                    Encrypt MQTT payloads with Enigma. A master secret will be generated.
+                                                </p>
+                                            </div>
+                                        </label>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="flex justify-end gap-3 mt-6">
@@ -642,6 +698,57 @@ export default function MQTTSourcesPage() {
                                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition disabled:opacity-50"
                                 >
                                     Add Subscription
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Master Secret Modal - shown after creating encrypted source */}
+                {showSecretModal && newMasterSecret && (
+                    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+                        <div className="bg-slate-900 rounded-xl p-6 w-full max-w-lg border border-amber-500/50 shadow-lg shadow-amber-500/10">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 bg-amber-500/20 rounded-lg">
+                                    <Key className="w-6 h-6 text-amber-400" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Master Secret Generated</h2>
+                                    <p className="text-sm text-slate-400">Save this secret - it will not be shown again!</p>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-800 rounded-lg p-4 mb-4">
+                                <div className="flex items-center justify-between gap-2">
+                                    <code className="text-amber-300 text-sm font-mono break-all flex-1">
+                                        {newMasterSecret}
+                                    </code>
+                                    <button
+                                        onClick={() => copyToClipboard(newMasterSecret)}
+                                        className="flex-shrink-0 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
+                                    >
+                                        {copiedSecret ? (
+                                            <CheckCircle className="w-5 h-5 text-green-400" />
+                                        ) : (
+                                            <Copy className="w-5 h-5 text-slate-300" />
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+                                <p className="text-red-300 text-sm">
+                                    <strong>⚠ Warning:</strong> This master secret is shown only once. Copy it now and store it securely.
+                                    You'll need it to configure your MQTT devices with encryption.
+                                </p>
+                            </div>
+
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={() => { setShowSecretModal(false); setNewMasterSecret(null); }}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition"
+                                >
+                                    I've Saved the Secret
                                 </button>
                             </div>
                         </div>
