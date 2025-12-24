@@ -12,6 +12,7 @@ import {
   Table,
   Columns,
   RefreshCw,
+  Wifi,
 } from 'lucide-react';
 import {
   Application,
@@ -21,13 +22,21 @@ import {
   TableInfo,
   ColumnInfo,
 } from '@/app/lib/api';
-import { FieldMappingConfig, PipelineConfig } from '../types/workflowTypes';
+import { FieldMappingConfig, PipelineConfig, MQTTSource, MQTTSourceField } from '../types/workflowTypes';
+
+// Generic source field type
+interface SourceField {
+  name: string;
+  dataType?: string;
+}
 
 interface MappingPanelProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (config: PipelineConfig) => void;
-  sourceApplication: Application;
+  // Either sourceApplication or mqttSource must be provided
+  sourceApplication?: Application;
+  mqttSource?: MQTTSource;
   targetDestination: Destination;
   sourceNodeId: string;
   targetNodeId: string;
@@ -39,6 +48,7 @@ export function MappingPanel({
   onClose,
   onSave,
   sourceApplication,
+  mqttSource,
   targetDestination,
   sourceNodeId,
   targetNodeId,
@@ -100,10 +110,14 @@ export function MappingPanel({
 
   // Auto-map fields with same name
   const handleAutoMap = () => {
-    const sourceFields = sourceApplication.fields || [];
+    // Get source fields from either source type
+    const fields: SourceField[] = mqttSource
+      ? (mqttSource.fields || []).map(f => ({ name: f.name, dataType: f.dataType }))
+      : (sourceApplication?.fields || []).map(f => ({ name: f.name, dataType: f.dataType }));
+
     const newMappings: FieldMappingConfig[] = [];
 
-    sourceFields.forEach((field) => {
+    fields.forEach((field) => {
       const matchingColumn = columns.find(
         (col) => col.name.toLowerCase() === field.name.toLowerCase()
       );
@@ -157,7 +171,9 @@ export function MappingPanel({
     const config: PipelineConfig = {
       sourceNodeId,
       targetNodeId,
-      applicationId: sourceApplication.id,
+      sourceType: mqttSource ? 'mqttSource' : 'senderApp',
+      applicationId: sourceApplication?.id,
+      mqttSourceId: mqttSource?.id,
       destinationType: 'database',
       destinationId: targetDestination.id,
       targetTable: selectedTable,
@@ -170,7 +186,13 @@ export function MappingPanel({
 
   if (!isOpen) return null;
 
-  const sourceFields = sourceApplication.fields || [];
+  // Get source fields from either sender app or MQTT source
+  const sourceFields: SourceField[] = mqttSource
+    ? (mqttSource.fields || []).map(f => ({ name: f.name, dataType: f.dataType }))
+    : (sourceApplication?.fields || []).map(f => ({ name: f.name, dataType: f.dataType }));
+
+  const sourceName = mqttSource?.name || sourceApplication?.name || 'Unknown';
+  const isMQTT = !!mqttSource;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
@@ -179,10 +201,14 @@ export function MappingPanel({
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-indigo-100">
-                <Send className="w-5 h-5 text-indigo-600" />
+              <div className={`p-2 rounded-lg ${isMQTT ? 'bg-violet-100' : 'bg-indigo-100'}`}>
+                {isMQTT ? (
+                  <Wifi className="w-5 h-5 text-violet-600" />
+                ) : (
+                  <Send className="w-5 h-5 text-indigo-600" />
+                )}
               </div>
-              <span className="font-semibold text-slate-700">{sourceApplication.name}</span>
+              <span className="font-semibold text-slate-700">{sourceName}</span>
             </div>
             <ArrowRight className="w-5 h-5 text-slate-400" />
             <div className="flex items-center gap-2">

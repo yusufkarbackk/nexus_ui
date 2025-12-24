@@ -1,7 +1,7 @@
 import { Node, Edge } from '@xyflow/react';
 import { Application, Destination, RestDestination } from '@/app/lib/api';
 
-export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'destination' | 'restDestination';
+export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination';
 
 // Base custom node data
 export interface CustomNodeData {
@@ -34,11 +34,37 @@ export interface RestDestinationNodeData extends CustomNodeData {
   restDestination: RestDestination;
 }
 
+// MQTT Source specific node data
+export interface MQTTSourceNodeData extends CustomNodeData {
+  category: 'mqttSource';
+  mqttSourceId: number;
+  mqttSource: MQTTSource;
+}
+
+// MQTT Source type
+export interface MQTTSource {
+  id: number;
+  name: string;
+  brokerUrl: string;
+  encryptionEnabled: boolean;
+  fields?: MQTTSourceField[];
+}
+
+export interface MQTTSourceField {
+  id: number;
+  mqttSourceId: number;
+  name: string;
+  dataType: string;
+  description?: string;
+}
+
 // Pipeline configuration stored in edges
 export interface PipelineConfig {
   sourceNodeId: string;
   targetNodeId: string;
-  applicationId: number;
+  sourceType: 'senderApp' | 'mqttSource';
+  applicationId?: number; // For sender app sources
+  mqttSourceId?: number;  // For MQTT sources
   destinationType: 'database' | 'rest';
   // For database destinations
   destinationId?: number;
@@ -75,7 +101,9 @@ export interface FieldMappingRequest {
 export type DestinationType = 'database' | 'rest';
 
 export interface PipelineRequest {
-  applicationId: number;
+  sourceType: 'senderApp' | 'mqttSource';
+  applicationId?: number;       // For sender app sources
+  mqttSourceId?: number;        // For MQTT sources
   destinationId?: number;       // For database destinations
   targetTable?: string;         // For database destinations
   destinationType: DestinationType;
@@ -176,6 +204,11 @@ export const nodeCategories: Record<NodeCategory, { color: string; bgColor: stri
     color: 'text-indigo-600',
     bgColor: 'bg-indigo-50',
     borderColor: 'border-indigo-400',
+  },
+  mqttSource: {
+    color: 'text-violet-600',
+    bgColor: 'bg-violet-50',
+    borderColor: 'border-violet-400',
   },
   destination: {
     color: 'text-teal-600',

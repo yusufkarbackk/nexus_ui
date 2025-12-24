@@ -176,7 +176,9 @@ model personal_access_tokens {
 model pipelines {
   id                  BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
   workflow_id         BigInt                     @db.UnsignedBigInt
-  application_id      BigInt                     @db.UnsignedBigInt
+  source_type         pipelines_source_type      @default(sender_app)
+  application_id      BigInt?                    @db.UnsignedBigInt
+  mqtt_source_id      BigInt?                    @db.UnsignedBigInt
   database_configs_id BigInt?                    @db.UnsignedBigInt
   target_table        String?                    @db.VarChar(255)
   destination_type    pipelines_destination_type @default(database)
@@ -186,12 +188,14 @@ model pipelines {
   updated_at          DateTime?                  @db.Timestamp(0)
   field_mappings      field_mappings[]
   rest_destinations   rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
-  applications        applications               @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
+  applications        applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
+  mqtt_sources        mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
   database_configs    database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
   workflows           workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
 
   @@index([rest_destination_id], map: "fk_pipelines_rest_destination")
   @@index([application_id], map: "pipelines_application_id_foreign")
+  @@index([mqtt_source_id], map: "fk_pipelines_mqtt_source")
   @@index([database_configs_id], map: "pipelines_database_configs_id_foreign")
   @@index([workflow_id], map: "pipelines_workflow_id_foreign")
 }
@@ -273,6 +277,7 @@ model mqtt_sources {
   updated_at              DateTime?            @db.Timestamp(0)
   mqtt_subscriptions      mqtt_subscriptions[]
   mqtt_source_fields      mqtt_source_fields[]
+  pipelines               pipelines[]
 
   @@index([is_active], map: "mqtt_sources_is_active_index")
 }
@@ -369,4 +374,9 @@ enum database_configs_status {
 enum rest_destinations_status {
   up
   down
+}
+
+enum pipelines_source_type {
+  sender_app
+  mqtt_source
 }

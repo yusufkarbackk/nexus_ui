@@ -46,6 +46,14 @@ interface MQTTSubscription {
     workflow?: { id: number; name: string };
 }
 
+interface MQTTSourceField {
+    id: number;
+    mqttSourceId: number;
+    name: string;
+    dataType: string;
+    description?: string;
+}
+
 interface Workflow {
     id: number;
     name: string;
@@ -64,6 +72,9 @@ export default function MQTTSourcesPage() {
     const [showSecretModal, setShowSecretModal] = useState(false);
     const [newMasterSecret, setNewMasterSecret] = useState<string | null>(null);
     const [copiedSecret, setCopiedSecret] = useState(false);
+    const [sourceFields, setSourceFields] = useState<MQTTSourceField[]>([]);
+    const [showFieldModal, setShowFieldModal] = useState(false);
+    const [fieldFormData, setFieldFormData] = useState({ name: '', dataType: 'string', description: '' });
 
     // Form state for source
     const [formData, setFormData] = useState({
@@ -246,8 +257,50 @@ export default function MQTTSourcesPage() {
             if (data.success) {
                 setSelectedSource(data.data);
             }
+            // Also load fields
+            const fieldsRes = await fetch(`${API_BASE_URL}/api/mqtt-sources/${id}/fields`);
+            const fieldsData = await fieldsRes.json();
+            if (fieldsData.success) {
+                setSourceFields(fieldsData.data || []);
+            }
         } catch (error) {
             console.error('Failed to load source details:', error);
+        }
+    };
+
+    const handleCreateField = async () => {
+        if (!selectedSource) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/mqtt-sources/${selectedSource.id}/fields`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(fieldFormData)
+            });
+            const data = await response.json();
+            if (data.success) {
+                setShowFieldModal(false);
+                setFieldFormData({ name: '', dataType: 'string', description: '' });
+                loadSourceDetails(selectedSource.id);
+            } else {
+                alert('Error: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Failed to create field:', error);
+        }
+    };
+
+    const handleDeleteField = async (fieldId: number) => {
+        if (!selectedSource || !confirm('Delete this field?')) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/mqtt-sources/${selectedSource.id}/fields/${fieldId}`, {
+                method: 'DELETE'
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadSourceDetails(selectedSource.id);
+            }
+        } catch (error) {
+            console.error('Failed to delete field:', error);
         }
     };
 
@@ -473,6 +526,106 @@ export default function MQTTSourcesPage() {
                             ) : (
                                 <p className="text-slate-500 text-sm">No subscriptions. Add topics to route MQTT messages to workflows.</p>
                             )}
+                        </div>
+
+                        {/* Data Fields (like sender app fields) */}
+                        <div className="border-t border-slate-700 pt-4 mt-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-semibold">Data Fields</h3>
+                                <button
+                                    onClick={() => setShowFieldModal(true)}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 rounded text-sm transition"
+                                >
+                                    <Plus className="w-4 h-4" /> Add Field
+                                </button>
+                            </div>
+                            <p className="text-slate-500 text-xs mb-3">Define expected payload fields for mapping to databases.</p>
+
+                            {sourceFields.length > 0 ? (
+                                <div className="space-y-2">
+                                    {sourceFields.map(field => (
+                                        <div key={field.id} className="bg-slate-800 rounded-lg p-3 flex items-center justify-between">
+                                            <div>
+                                                <p className="text-white font-mono text-sm">{field.name}</p>
+                                                <p className="text-slate-500 text-xs">
+                                                    Type: {field.dataType} {field.description && `• ${field.description}`}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => handleDeleteField(field.id)}
+                                                className="text-red-400 hover:text-red-300 p-1"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-slate-500 text-sm">No fields defined. Add fields to enable mapping to database columns.</p>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Add Field Modal */}
+                {showFieldModal && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                        <div className="bg-slate-900 rounded-xl p-6 w-full max-w-md border border-slate-700">
+                            <h2 className="text-xl font-bold mb-4">Add Data Field</h2>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Field Name *</label>
+                                    <input
+                                        type="text"
+                                        value={fieldFormData.name}
+                                        onChange={(e) => setFieldFormData({ ...fieldFormData, name: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none font-mono"
+                                        placeholder="temperature"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Data Type</label>
+                                    <select
+                                        value={fieldFormData.dataType}
+                                        onChange={(e) => setFieldFormData({ ...fieldFormData, dataType: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                    >
+                                        <option value="string">String</option>
+                                        <option value="number">Number</option>
+                                        <option value="boolean">Boolean</option>
+                                        <option value="json">JSON Object</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                                    <input
+                                        type="text"
+                                        value={fieldFormData.description}
+                                        onChange={(e) => setFieldFormData({ ...fieldFormData, description: e.target.value })}
+                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                                        placeholder="Temperature reading in Celsius"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    onClick={() => setShowFieldModal(false)}
+                                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleCreateField}
+                                    disabled={!fieldFormData.name}
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 rounded-lg transition disabled:opacity-50"
+                                >
+                                    Add Field
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
