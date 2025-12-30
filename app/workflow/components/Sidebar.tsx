@@ -18,6 +18,7 @@ import {
   Loader2,
   RefreshCw,
   LucideIcon,
+  Wifi,
 } from 'lucide-react';
 import { DraggableNodeItem, nodeCategories } from '../types/workflowTypes';
 import { draggableNodes } from '../data/initialData';
@@ -25,9 +26,11 @@ import {
   fetchApplications,
   fetchDestinations,
   fetchRestDestinations,
+  fetchMqttSources,
   Application,
   Destination,
   RestDestination,
+  MQTTSource,
 } from '@/app/lib/api';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -42,6 +45,7 @@ const iconMap: Record<string, LucideIcon> = {
   'git-merge': GitMerge,
   'git-branch': GitBranch,
   server: Server,
+  wifi: Wifi,
 };
 
 interface SidebarProps {
@@ -107,9 +111,11 @@ export function Sidebar({ className }: SidebarProps) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
+  const [mqttSources, setMqttSources] = useState<MQTTSource[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [isLoadingDests, setIsLoadingDests] = useState(true);
   const [isLoadingRestDests, setIsLoadingRestDests] = useState(true);
+  const [isLoadingMqtt, setIsLoadingMqtt] = useState(true);
 
   const loadApplications = async () => {
     setIsLoadingApps(true);
@@ -147,10 +153,23 @@ export function Sidebar({ className }: SidebarProps) {
     }
   };
 
+  const loadMqttSources = async () => {
+    setIsLoadingMqtt(true);
+    try {
+      const response = await fetchMqttSources();
+      setMqttSources(response.data || []);
+    } catch (error) {
+      console.error('Failed to load MQTT sources:', error);
+    } finally {
+      setIsLoadingMqtt(false);
+    }
+  };
+
   useEffect(() => {
     loadApplications();
     loadDestinations();
     loadRestDestinations();
+    loadMqttSources();
   }, []);
 
   // Convert applications to draggable nodes
@@ -162,6 +181,17 @@ export function Sidebar({ className }: SidebarProps) {
     icon: 'send',
     applicationId: app.id,
     application: app,
+  }));
+
+  // Convert MQTT sources to draggable nodes
+  const mqttSourceNodes: DraggableNodeItem[] = mqttSources.map((source) => ({
+    type: 'mqttSource',
+    label: source.name,
+    description: source.fields?.length ? `${source.fields.length} fields` : source.brokerUrl,
+    category: 'mqttSource',
+    icon: 'wifi',
+    mqttSourceId: source.id,
+    mqttSource: source,
   }));
 
   // Convert destinations to draggable nodes
@@ -247,6 +277,45 @@ export function Sidebar({ className }: SidebarProps) {
             ) : (
               <p className="text-xs text-slate-500 text-center py-2">
                 No sender apps found
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* MQTT Sources */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-amber-500" />
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                MQTT Sources
+              </h3>
+            </div>
+            <button
+              onClick={loadMqttSources}
+              disabled={isLoadingMqtt}
+              className="p-1 hover:bg-slate-700 rounded transition-colors"
+              title="Refresh MQTT sources"
+            >
+              {isLoadingMqtt ? (
+                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3 text-slate-500" />
+              )}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {isLoadingMqtt ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+              </div>
+            ) : mqttSourceNodes.length > 0 ? (
+              mqttSourceNodes.map((node) => (
+                <DraggableNode key={`mqtt-${node.mqttSourceId}`} node={node} />
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-2">
+                No MQTT sources found
               </p>
             )}
           </div>

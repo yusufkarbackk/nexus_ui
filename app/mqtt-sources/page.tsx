@@ -85,13 +85,12 @@ export default function MQTTSourcesPage() {
         password: '',
         clientId: '',
         useTls: false,
-        encryptionEnabled: false,
+        encryptionEnabled: true, // Encryption is always mandatory
         isActive: true
     });
 
     // Form state for subscription
     const [subFormData, setSubFormData] = useState({
-        workflowId: 0,
         topicPattern: '',
         qos: 0,
         payloadFormat: 'json',
@@ -226,7 +225,7 @@ export default function MQTTSourcesPage() {
             if (data.success) {
                 setShowSubModal(false);
                 loadSourceDetails(selectedSource.id);
-                setSubFormData({ workflowId: 0, topicPattern: '', qos: 0, payloadFormat: 'json', isActive: true });
+                setSubFormData({ topicPattern: '', qos: 0, payloadFormat: 'json', isActive: true });
             } else {
                 alert('Error: ' + data.message);
             }
@@ -313,7 +312,7 @@ export default function MQTTSourcesPage() {
             password: '',
             clientId: '',
             useTls: false,
-            encryptionEnabled: false,
+            encryptionEnabled: true, // Encryption is always mandatory
             isActive: true
         });
     };
@@ -338,6 +337,7 @@ export default function MQTTSourcesPage() {
             password: '',
             clientId: source.clientId || '',
             useTls: source.useTls,
+            encryptionEnabled: true, // Encryption is always mandatory
             isActive: source.isActive
         });
         setShowModal(true);
@@ -725,26 +725,21 @@ export default function MQTTSourcesPage() {
                                     </label>
                                 </div>
 
-                                {/* Encryption toggle - only shown for new sources */}
+                                {/* Encryption indicator - always enabled */}
                                 {!selectedSource && (
                                     <div className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
-                                        <label className="flex items-center gap-3 cursor-pointer">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.encryptionEnabled}
-                                                onChange={(e) => setFormData({ ...formData, encryptionEnabled: e.target.checked })}
-                                                className="w-4 h-4 rounded accent-amber-500"
-                                            />
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <Lock className="w-4 h-4 text-amber-400" />
-                                                    <span className="text-sm font-medium text-slate-200">Enable Encryption</span>
-                                                </div>
-                                                <p className="text-xs text-slate-500 mt-1">
-                                                    Encrypt MQTT payloads with Enigma. A master secret will be generated.
-                                                </p>
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Lock className="w-4 h-4 text-amber-400" />
+                                                <span className="text-sm font-medium text-slate-200">Encryption</span>
                                             </div>
-                                        </label>
+                                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-sm font-medium rounded-full border border-emerald-500/30">
+                                                Always Enabled
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            Encrypt MQTT payloads with Enigma. A master secret will be generated.
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -784,20 +779,6 @@ export default function MQTTSourcesPage() {
                                         placeholder="sensor/+/temperature"
                                     />
                                     <p className="text-slate-500 text-xs mt-1">Use + for single-level wildcard, # for multi-level</p>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Target Workflow *</label>
-                                    <select
-                                        value={subFormData.workflowId}
-                                        onChange={(e) => setSubFormData({ ...subFormData, workflowId: parseInt(e.target.value) })}
-                                        className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                                    >
-                                        <option value={0}>Select workflow...</option>
-                                        {workflows.map(wf => (
-                                            <option key={wf.id} value={wf.id}>{wf.name}</option>
-                                        ))}
-                                    </select>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
@@ -847,7 +828,7 @@ export default function MQTTSourcesPage() {
                                 </button>
                                 <button
                                     onClick={handleCreateSubscription}
-                                    disabled={!subFormData.topicPattern || !subFormData.workflowId}
+                                    disabled={!subFormData.topicPattern}
                                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition disabled:opacity-50"
                                 >
                                     Add Subscription

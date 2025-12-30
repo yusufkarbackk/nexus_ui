@@ -171,7 +171,7 @@ export function MappingPanel({
     const config: PipelineConfig = {
       sourceNodeId,
       targetNodeId,
-      sourceType: mqttSource ? 'mqttSource' : 'senderApp',
+      sourceType: mqttSource ? 'mqtt_source' : 'sender_app',
       applicationId: sourceApplication?.id,
       mqttSourceId: mqttSource?.id,
       destinationType: 'database',
@@ -308,7 +308,7 @@ export function MappingPanel({
                         const mappedColumn = getMappedColumn(field.name);
                         return (
                           <div
-                            key={field.id}
+                            key={field.name}
                             className={`
                               flex items-center justify-between px-3 py-2 rounded-lg border
                               ${mappedColumn
@@ -411,7 +411,7 @@ export function MappingPanel({
                                 {sourceFields
                                   .filter((f) => !getMappedColumn(f.name))
                                   .map((field) => (
-                                    <option key={field.id} value={field.name} className="text-slate-900">
+                                    <option key={field.name} value={field.name} className="text-slate-900">
                                       {field.name} ({field.dataType})
                                     </option>
                                   ))}
@@ -430,21 +430,145 @@ export function MappingPanel({
                 </div>
               )}
 
-              {/* Mapping Summary */}
+              {/* Field Mapping Configuration (ETL Options) */}
               {fieldMappings.length > 0 && (
                 <div className="mt-6 p-4 bg-slate-50 rounded-lg">
-                  <h4 className="text-sm font-semibold text-slate-700 mb-2">
-                    Mapping Summary ({fieldMappings.length} field{fieldMappings.length !== 1 ? 's' : ''})
+                  <h4 className="text-sm font-semibold text-slate-700 mb-4">
+                    Field Transformations ({fieldMappings.length} field{fieldMappings.length !== 1 ? 's' : ''})
                   </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {fieldMappings.map((mapping) => (
+                  <div className="space-y-3">
+                    {fieldMappings.map((mapping, index) => (
                       <div
                         key={mapping.sourceField}
-                        className="flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 rounded text-xs"
+                        className="bg-white p-3 rounded-lg border border-slate-200"
                       >
-                        <span className="text-indigo-600 font-medium">{mapping.sourceField}</span>
-                        <ArrowRight className="w-3 h-3 text-slate-400" />
-                        <span className="text-teal-600 font-medium">{mapping.destinationColumn}</span>
+                        {/* Field Mapping Header */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-indigo-600 font-medium text-sm">{mapping.sourceField}</span>
+                            <ArrowRight className="w-3 h-3 text-slate-400" />
+                            <span className="text-teal-600 font-medium text-sm">{mapping.destinationColumn}</span>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveMapping(mapping.sourceField)}
+                            className="p-1 hover:bg-red-100 rounded"
+                          >
+                            <X className="w-3 h-3 text-red-500" />
+                          </button>
+                        </div>
+
+                        {/* Transform Options Row */}
+                        <div className="grid grid-cols-4 gap-2">
+                          {/* Data Type */}
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-medium">Type</label>
+                            <select
+                              value={mapping.dataType || ''}
+                              onChange={(e) => {
+                                const newMappings = [...fieldMappings];
+                                newMappings[index] = { ...mapping, dataType: e.target.value || undefined };
+                                setFieldMappings(newMappings);
+                              }}
+                              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-700"
+                            >
+                              <option value="">Auto</option>
+                              <option value="string">String</option>
+                              <option value="number">Number</option>
+                              <option value="integer">Integer</option>
+                              <option value="boolean">Boolean</option>
+                              <option value="datetime">DateTime</option>
+                            </select>
+                          </div>
+
+                          {/* Transform Type */}
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-medium">Transform</label>
+                            <select
+                              value={mapping.transformType || ''}
+                              onChange={(e) => {
+                                const newMappings = [...fieldMappings];
+                                newMappings[index] = { ...mapping, transformType: e.target.value || undefined, transformParam: undefined };
+                                setFieldMappings(newMappings);
+                              }}
+                              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-700"
+                            >
+                              <option value="">None</option>
+                              <optgroup label="String">
+                                <option value="uppercase">Uppercase</option>
+                                <option value="lowercase">Lowercase</option>
+                                <option value="trim">Trim</option>
+                              </optgroup>
+                              <optgroup label="Number">
+                                <option value="round">Round</option>
+                                <option value="floor">Floor</option>
+                                <option value="ceil">Ceiling</option>
+                                <option value="abs">Absolute</option>
+                                <option value="multiply">Multiply</option>
+                                <option value="divide">Divide</option>
+                                <option value="add">Add</option>
+                                <option value="subtract">Subtract</option>
+                              </optgroup>
+                              <optgroup label="DateTime">
+                                <option value="timestamp">Unix Timestamp</option>
+                                <option value="date_now">Current Date</option>
+                                <option value="datetime_now">Current DateTime</option>
+                              </optgroup>
+                            </select>
+                          </div>
+
+                          {/* Transform Param (for multiply, divide, round, etc.) */}
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-medium">Param</label>
+                            <input
+                              type="text"
+                              placeholder={['multiply', 'divide', 'add', 'subtract'].includes(mapping.transformType || '') ? 'Value' : 'Decimals'}
+                              value={mapping.transformParam || ''}
+                              onChange={(e) => {
+                                const newMappings = [...fieldMappings];
+                                newMappings[index] = { ...mapping, transformParam: e.target.value || undefined };
+                                setFieldMappings(newMappings);
+                              }}
+                              disabled={!['round', 'multiply', 'divide', 'add', 'subtract'].includes(mapping.transformType || '')}
+                              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+                            />
+                          </div>
+
+                          {/* Null Handling */}
+                          <div>
+                            <label className="text-[10px] text-slate-500 uppercase font-medium">If Null</label>
+                            <select
+                              value={mapping.nullHandling || 'skip'}
+                              onChange={(e) => {
+                                const newMappings = [...fieldMappings];
+                                newMappings[index] = { ...mapping, nullHandling: e.target.value };
+                                setFieldMappings(newMappings);
+                              }}
+                              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-700"
+                            >
+                              <option value="skip">Skip field</option>
+                              <option value="use_default">Use default</option>
+                              <option value="required">Error (required)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Default Value (only if null_handling is use_default) */}
+                        {mapping.nullHandling === 'use_default' && (
+                          <div className="mt-2">
+                            <label className="text-[10px] text-slate-500 uppercase font-medium">Default Value</label>
+                            <input
+                              type="text"
+                              placeholder="Default value when null"
+                              value={mapping.defaultValue || ''}
+                              onChange={(e) => {
+                                const newMappings = [...fieldMappings];
+                                newMappings[index] = { ...mapping, defaultValue: e.target.value || undefined };
+                                setFieldMappings(newMappings);
+                              }}
+                              className="w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-700"
+                            />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>

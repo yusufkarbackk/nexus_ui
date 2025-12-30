@@ -757,3 +757,74 @@ export async function toggleRestDestinationStatus(id: number): Promise<{ success
 
   return response.json();
 }
+
+// ============================================
+// MQTT Source API Functions
+// ============================================
+
+export interface MQTTSourceField {
+  id: number;
+  mqttSourceId: number;
+  name: string;
+  dataType: string;
+  description?: string;
+}
+
+export interface MQTTSource {
+  id: number;
+  name: string;
+  description?: string;
+  brokerUrl: string;
+  username?: string;
+  clientId?: string;
+  useTls: boolean;
+  encryptionEnabled: boolean;
+  secretVersion: number;
+  isActive: boolean;
+  status: 'connected' | 'disconnected' | 'error';
+  fields?: MQTTSourceField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MQTTSourceListResponse {
+  success: boolean;
+  message: string;
+  data: MQTTSource[];
+}
+
+// Fetch all MQTT sources
+export async function fetchMqttSources(): Promise<MQTTSourceListResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/mqtt-sources`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}
+
+// Fetch MQTT source fields
+export async function fetchMqttSourceFields(sourceId: number): Promise<{ success: boolean; data: MQTTSourceField[] }> {
+  const response = await fetch(`${API_BASE_URL}/api/mqtt-sources/${sourceId}/fields`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}

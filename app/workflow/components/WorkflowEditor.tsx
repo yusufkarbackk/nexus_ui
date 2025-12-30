@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode } from './nodes';
+import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode } from './nodes';
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
 import {
@@ -29,6 +29,8 @@ import {
   SenderAppNodeData,
   DestinationNodeData,
   RestDestinationNodeData,
+  MQTTSourceNodeData,
+  MQTTSource,
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
@@ -42,6 +44,7 @@ const nodeTypes = {
   senderApp: SenderAppNode,
   destination: DestinationNode,
   restDestination: RestDestinationNode,
+  mqttSource: MQTTSourceNode,
 };
 
 let nodeIdCounter = 1;
@@ -55,6 +58,7 @@ interface MappingPanelState {
   sourceNodeId: string;
   targetNodeId: string;
   sourceApplication: Application | null;
+  mqttSource?: MQTTSource | null;  // For MQTT source connections
   targetDestination: Destination | null;
   pendingConnection: Connection | null;
   existingConfig: PipelineConfig | null;
@@ -115,29 +119,57 @@ function FlowCanvas() {
 
           let nodeIndex = 0;
           const appNodeMap = new Map<number, string>(); // applicationId -> nodeId
+          const mqttNodeMap = new Map<number, string>(); // mqttSourceId -> nodeId
           const destNodeMap = new Map<number, string>(); // destinationId -> nodeId
 
           workflow.pipelines?.forEach((pipeline, pipelineIndex) => {
-            // Create sender app node if not already created
-            let sourceNodeId = appNodeMap.get(pipeline.applicationId);
-            if (!sourceNodeId && pipeline.application) {
-              sourceNodeId = `node-loaded-app-${pipeline.applicationId}`;
-              appNodeMap.set(pipeline.applicationId, sourceNodeId);
+            let sourceNodeId: string | undefined;
 
-              newNodes.push({
-                id: sourceNodeId,
-                type: 'senderApp',
-                position: { x: 100, y: 100 + (nodeIndex * 200) },
-                data: {
-                  label: pipeline.application.name,
-                  description: pipeline.application.description || `${pipeline.application.fields?.length || 0} fields`,
-                  category: 'senderApp',
-                  icon: 'send',
-                  applicationId: pipeline.application.id,
-                  application: pipeline.application,
-                } as SenderAppNodeData,
-              });
-              nodeIndex++;
+            // Check if this is an MQTT source or sender app (matches DB enum values)
+            if (pipeline.sourceType === 'mqtt_source' && pipeline.mqttSource) {
+              // Create MQTT source node if not already created
+              sourceNodeId = mqttNodeMap.get(pipeline.mqttSourceId || 0);
+              if (!sourceNodeId) {
+                sourceNodeId = `node-loaded-mqtt-${pipeline.mqttSourceId}`;
+                mqttNodeMap.set(pipeline.mqttSourceId || 0, sourceNodeId);
+
+                newNodes.push({
+                  id: sourceNodeId,
+                  type: 'mqttSource',
+                  position: { x: 100, y: 100 + (nodeIndex * 200) },
+                  data: {
+                    label: pipeline.mqttSource.name,
+                    description: pipeline.mqttSource.brokerUrl || 'MQTT Broker',
+                    category: 'mqttSource',
+                    icon: 'wifi',
+                    mqttSourceId: pipeline.mqttSource.id,
+                    mqttSource: pipeline.mqttSource,
+                  } as MQTTSourceNodeData,
+                });
+                nodeIndex++;
+              }
+            } else if (pipeline.application) {
+              // Create sender app node if not already created
+              sourceNodeId = appNodeMap.get(pipeline.applicationId);
+              if (!sourceNodeId) {
+                sourceNodeId = `node-loaded-app-${pipeline.applicationId}`;
+                appNodeMap.set(pipeline.applicationId, sourceNodeId);
+
+                newNodes.push({
+                  id: sourceNodeId,
+                  type: 'senderApp',
+                  position: { x: 100, y: 100 + (nodeIndex * 200) },
+                  data: {
+                    label: pipeline.application.name,
+                    description: pipeline.application.description || `${pipeline.application.fields?.length || 0} fields`,
+                    category: 'senderApp',
+                    icon: 'send',
+                    applicationId: pipeline.application.id,
+                    application: pipeline.application,
+                  } as SenderAppNodeData,
+                });
+                nodeIndex++;
+              }
             }
 
             // Create destination node based on type
@@ -208,6 +240,7 @@ function FlowCanvas() {
               const config: PipelineConfig = {
                 sourceNodeId,
                 targetNodeId,
+                sourceType: (pipeline.sourceType as 'sender_app' | 'mqtt_source') || 'sender_app',
                 applicationId: pipeline.applicationId,
                 destinationType: pipeline.destinationType || 'database',
                 destinationId: pipeline.destinationId,
@@ -216,6 +249,11 @@ function FlowCanvas() {
                 fieldMappings: pipeline.fieldMappings?.map(fm => ({
                   sourceField: fm.sourceField,
                   destinationColumn: fm.destinationColumn,
+                  dataType: fm.dataType,
+                  transformType: fm.transformType,
+                  transformParam: fm.transformParam,
+                  defaultValue: fm.defaultValue,
+                  nullHandling: fm.nullHandling,
                 })) || [],
               };
 
@@ -250,6 +288,15 @@ function FlowCanvas() {
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
 
+      // Debug logging
+      console.log('onConnect called:', {
+        connection,
+        sourceNodeType: sourceNode?.type,
+        targetNodeType: targetNode?.type,
+        sourceNodeData: sourceNode?.data,
+        nodesCount: nodes.length
+      });
+
       // Check if this is a sender app -> database destination connection
       if (
         sourceNode?.type === 'senderApp' &&
@@ -282,7 +329,73 @@ function FlowCanvas() {
         const config: PipelineConfig = {
           sourceNodeId: connection.source!,
           targetNodeId: connection.target!,
+          sourceType: 'sender_app',
           applicationId: sourceData.application.id,
+          destinationType: 'rest',
+          restDestinationId: targetData.restDestinationId,
+          fieldMappings: [], // No field mappings for REST - sends full payload
+        };
+
+        // Add the edge with REST styling
+        setEdges((eds) =>
+          addEdge(
+            {
+              ...connection,
+              id: edgeId,
+              animated: true,
+              style: { stroke: '#f97316', strokeWidth: 2 },
+              label: targetData.restDestination?.name || 'REST API',
+              labelStyle: { fill: '#f97316', fontSize: 10 },
+              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+              labelBgPadding: [4, 2] as [number, number],
+              labelBgBorderRadius: 4,
+              data: { pipelineConfig: config },
+            },
+            eds
+          )
+        );
+
+        // Store the pipeline config
+        setPipelineConfigs((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(edgeId, config);
+          return newMap;
+        });
+      } else if (
+        sourceNode?.type === 'mqttSource' &&
+        targetNode?.type === 'destination'
+      ) {
+        // MQTT source -> database destination connection
+        const sourceData = sourceNode.data as MQTTSourceNodeData;
+        const targetData = targetNode.data as DestinationNodeData;
+
+        // Open mapping panel for database destinations
+        setMappingPanel({
+          isOpen: true,
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          sourceApplication: null,  // No sender app, use MQTT source
+          mqttSource: sourceData.mqttSource,
+          targetDestination: targetData.destination,
+          pendingConnection: connection,
+          existingConfig: null,
+        });
+      } else if (
+        sourceNode?.type === 'mqttSource' &&
+        targetNode?.type === 'restDestination'
+      ) {
+        // MQTT source -> REST destination connection
+        const sourceData = sourceNode.data as MQTTSourceNodeData;
+        const targetData = targetNode.data as RestDestinationNodeData;
+
+        const edgeId = `edge-${connection.source}-${connection.target}`;
+
+        // Create the pipeline config for REST destination
+        const config: PipelineConfig = {
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          sourceType: 'mqtt_source',
+          mqttSourceId: sourceData.mqttSource.id,
           destinationType: 'rest',
           restDestinationId: targetData.restDestinationId,
           fieldMappings: [], // No field mappings for REST - sends full payload
@@ -429,23 +542,36 @@ function FlowCanvas() {
       const sourceNode = nodes.find((n) => n.id === edge.source);
       const targetNode = nodes.find((n) => n.id === edge.target);
 
-      if (
-        sourceNode?.type === 'senderApp' &&
-        targetNode?.type === 'destination'
-      ) {
-        const sourceData = sourceNode.data as SenderAppNodeData;
-        const targetData = targetNode.data as DestinationNodeData;
+      if (!sourceNode || !targetNode) {
+        console.log('Source or target node not found');
+        return;
+      }
 
-        // Open mapping panel with existing config
-        setMappingPanel({
+      // Handle both senderApp and mqttSource as source nodes
+      // Handle both destination and restDestination as target nodes
+      const isSenderApp = sourceNode.type === 'senderApp';
+      const isMqttSource = sourceNode.type === 'mqttSource';
+      const isDbDest = targetNode.type === 'destination';
+      const isRestDest = targetNode.type === 'restDestination';
+
+      if ((isSenderApp || isMqttSource) && (isDbDest || isRestDest)) {
+        const targetData = isDbDest
+          ? (targetNode.data as DestinationNodeData).destination
+          : (targetNode.data as RestDestinationNodeData).restDestination;
+
+        // Build mapping panel state
+        const panelState: MappingPanelState = {
           isOpen: true,
           sourceNodeId: edge.source,
           targetNodeId: edge.target,
-          sourceApplication: sourceData.application,
-          targetDestination: targetData.destination,
+          sourceApplication: isSenderApp ? (sourceNode.data as SenderAppNodeData).application : null,
+          mqttSource: isMqttSource ? (sourceNode.data as MQTTSourceNodeData).mqttSource : null,
+          targetDestination: targetData,
           pendingConnection: null, // null because we're editing, not creating
           existingConfig: existingConfig,
-        });
+        };
+
+        setMappingPanel(panelState);
       }
     },
     [nodes, pipelineConfigs]
@@ -515,6 +641,21 @@ function FlowCanvas() {
             restDestination: nodeData.restDestination,
           } as RestDestinationNodeData,
         };
+      } else if (nodeData.type === 'mqttSource' && nodeData.mqttSource) {
+        // Handle MQTT source drop
+        newNode = {
+          id: generateNodeId(),
+          type: 'mqttSource',
+          position,
+          data: {
+            label: nodeData.label,
+            description: nodeData.description,
+            category: 'mqttSource',
+            icon: nodeData.icon,
+            mqttSourceId: nodeData.mqttSourceId!,
+            mqttSource: nodeData.mqttSource,
+          } as MQTTSourceNodeData,
+        };
       } else {
         newNode = {
           id: generateNodeId(),
@@ -551,7 +692,12 @@ function FlowCanvas() {
   const handleSave = async () => {
     // Collect all pipeline configurations
     const pipelines = Array.from(pipelineConfigs.values()).map((config) => ({
-      applicationId: config.applicationId,
+      sourceType: config.sourceType || 'sender_app',
+      // Source fields - either applicationId or mqttSourceId based on sourceType
+      ...(config.sourceType === 'mqtt_source'
+        ? { mqttSourceId: config.mqttSourceId }
+        : { applicationId: config.applicationId }
+      ),
       destinationType: config.destinationType || 'database',
       // Database destination fields
       ...(config.destinationType !== 'rest' && {
@@ -566,12 +712,17 @@ function FlowCanvas() {
       fieldMappings: config.fieldMappings.map((fm) => ({
         sourceField: fm.sourceField,
         destinationColumn: fm.destinationColumn,
+        dataType: fm.dataType,
+        transformType: fm.transformType,
+        transformParam: fm.transformParam,
+        defaultValue: fm.defaultValue,
+        nullHandling: fm.nullHandling,
       })),
     }));
 
     if (pipelines.length === 0) {
       setSaveStatus('error');
-      setSaveMessage('Please add at least one data mapping (connect a sender app to a destination)');
+      setSaveMessage('Please add at least one data mapping (connect a source to a destination)');
       setTimeout(() => setSaveStatus('idle'), 3000);
       return;
     }
@@ -875,12 +1026,13 @@ function FlowCanvas() {
       </div>
 
       {/* Mapping Panel */}
-      {mappingPanel.sourceApplication && mappingPanel.targetDestination && (
+      {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && mappingPanel.targetDestination && (
         <MappingPanel
           isOpen={mappingPanel.isOpen}
           onClose={handleMappingClose}
           onSave={handleMappingSave}
-          sourceApplication={mappingPanel.sourceApplication}
+          sourceApplication={mappingPanel.sourceApplication || undefined}
+          mqttSource={mappingPanel.mqttSource || undefined}
           targetDestination={mappingPanel.targetDestination}
           sourceNodeId={mappingPanel.sourceNodeId}
           targetNodeId={mappingPanel.targetNodeId}

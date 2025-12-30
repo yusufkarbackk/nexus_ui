@@ -40,7 +40,7 @@ export function SenderAppForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
+  const encryptionEnabled = true; // Encryption is always mandatory
   const [masterSecret, setMasterSecret] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [secretCopied, setSecretCopied] = useState(false);
@@ -356,25 +356,17 @@ export function SenderAppForm() {
                           Encrypt data with daily rotating keys (Enigma-style)
                         </p>
                       </div>
-                      <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={encryptionEnabled}
-                          onChange={(e) => setEncryptionEnabled(e.target.checked)}
-                          className="sr-only peer"
-                        />
-                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-                      </label>
+                      <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-sm font-medium rounded-full border border-emerald-500/30">
+                        Always Enabled
+                      </span>
                     </div>
 
-                    {encryptionEnabled && (
-                      <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                        <p className="text-amber-400 text-sm">
-                          <strong>⚠️ Important:</strong> After creating, you will receive a Master Secret.
-                          Copy it immediately - it will only be shown once! You&apos;ll need it to encrypt data using our SDK.
-                        </p>
-                      </div>
-                    )}
+                    <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                      <p className="text-amber-400 text-sm">
+                        <strong>⚠️ Important:</strong> After creating, you will receive a Master Secret.
+                        Copy it immediately - it will only be shown once! You&apos;ll need it to encrypt data using our SDK.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </section>

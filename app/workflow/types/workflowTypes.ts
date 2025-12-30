@@ -62,7 +62,7 @@ export interface MQTTSourceField {
 export interface PipelineConfig {
   sourceNodeId: string;
   targetNodeId: string;
-  sourceType: 'senderApp' | 'mqttSource';
+  sourceType: 'sender_app' | 'mqtt_source';
   applicationId?: number; // For sender app sources
   mqttSourceId?: number;  // For MQTT sources
   destinationType: 'database' | 'rest';
@@ -77,6 +77,11 @@ export interface PipelineConfig {
 export interface FieldMappingConfig {
   sourceField: string;
   destinationColumn: string;
+  dataType?: string;       // string, number, boolean, datetime
+  transformType?: string;  // uppercase, lowercase, round, etc.
+  transformParam?: string; // parameter for transform
+  defaultValue?: string;   // default if source is null
+  nullHandling?: string;   // skip, use_default, required
 }
 
 // Table and column info from API
@@ -96,12 +101,17 @@ export interface ColumnInfo {
 export interface FieldMappingRequest {
   sourceField: string;
   destinationColumn: string;
+  dataType?: string;
+  transformType?: string;
+  transformParam?: string;
+  defaultValue?: string;
+  nullHandling?: string;
 }
 
 export type DestinationType = 'database' | 'rest';
 
 export interface PipelineRequest {
-  sourceType: 'senderApp' | 'mqttSource';
+  sourceType: 'sender_app' | 'mqtt_source';
   applicationId?: number;       // For sender app sources
   mqttSourceId?: number;        // For MQTT sources
   destinationId?: number;       // For database destinations
@@ -137,13 +147,22 @@ export interface FieldMapping {
 export interface Pipeline {
   id: number;
   workflowId: number;
+  // Source info (uses DB enum values: sender_app, mqtt_source)
+  sourceType?: 'sender_app' | 'mqtt_source';
   applicationId: number;
+  mqttSourceId?: number;
+  // Destination info
+  destinationType?: 'database' | 'rest';
   destinationId: number;
   targetTable: string;
+  restDestinationId?: number;
   isActive: boolean;
   fieldMappings: FieldMapping[];
+  // Expanded references
   application?: Application;
+  mqttSource?: MQTTSource;
   destination?: Destination;
+  restDestination?: RestDestination;
   createdAt: string;
   updatedAt: string;
 }
@@ -164,8 +183,10 @@ export type ActionNodeType = Node<CustomNodeData, 'action'>;
 export type LogicNodeType = Node<CustomNodeData, 'logic'>;
 export type SenderAppNodeType = Node<SenderAppNodeData, 'senderApp'>;
 export type DestinationNodeType = Node<DestinationNodeData, 'destination'>;
+export type RestDestinationNodeType = Node<RestDestinationNodeData, 'restDestination'>;
+export type MQTTSourceNodeType = Node<MQTTSourceNodeData, 'mqttSource'>;
 
-export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType;
+export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType;
 export type WorkflowEdge = Edge<{ pipelineConfig?: PipelineConfig }>;
 
 export interface DraggableNodeItem {
@@ -182,6 +203,9 @@ export interface DraggableNodeItem {
   // For REST destinations
   restDestinationId?: number;
   restDestination?: RestDestination;
+  // For MQTT sources
+  mqttSourceId?: number;
+  mqttSource?: MQTTSource;
 }
 
 export const nodeCategories: Record<NodeCategory, { color: string; bgColor: string; borderColor: string }> = {
