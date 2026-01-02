@@ -59,7 +59,9 @@ interface MappingPanelState {
   targetNodeId: string;
   sourceApplication: Application | null;
   mqttSource?: MQTTSource | null;  // For MQTT source connections
-  targetDestination: Destination | null;
+  targetType: 'database' | 'rest';  // Type of target destination
+  targetDestination: Destination | null;  // Database destination
+  targetRestDestination?: RestDestination | null;  // REST destination
   pendingConnection: Connection | null;
   existingConfig: PipelineConfig | null;
 }
@@ -90,7 +92,9 @@ function FlowCanvas() {
     sourceNodeId: '',
     targetNodeId: '',
     sourceApplication: null,
+    targetType: 'database',
     targetDestination: null,
+    targetRestDestination: null,
     pendingConnection: null,
     existingConfig: null,
   });
@@ -555,18 +559,16 @@ function FlowCanvas() {
       const isRestDest = targetNode.type === 'restDestination';
 
       if ((isSenderApp || isMqttSource) && (isDbDest || isRestDest)) {
-        const targetData = isDbDest
-          ? (targetNode.data as DestinationNodeData).destination
-          : (targetNode.data as RestDestinationNodeData).restDestination;
-
-        // Build mapping panel state
+        // Build mapping panel state based on target type
         const panelState: MappingPanelState = {
           isOpen: true,
           sourceNodeId: edge.source,
           targetNodeId: edge.target,
           sourceApplication: isSenderApp ? (sourceNode.data as SenderAppNodeData).application : null,
           mqttSource: isMqttSource ? (sourceNode.data as MQTTSourceNodeData).mqttSource : null,
-          targetDestination: targetData,
+          targetType: isDbDest ? 'database' : 'rest',
+          targetDestination: isDbDest ? (targetNode.data as DestinationNodeData).destination : null,
+          targetRestDestination: isRestDest ? (targetNode.data as RestDestinationNodeData).restDestination : null,
           pendingConnection: null, // null because we're editing, not creating
           existingConfig: existingConfig,
         };
@@ -1026,14 +1028,16 @@ function FlowCanvas() {
       </div>
 
       {/* Mapping Panel */}
-      {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && mappingPanel.targetDestination && (
+      {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && (mappingPanel.targetDestination || mappingPanel.targetRestDestination) && (
         <MappingPanel
           isOpen={mappingPanel.isOpen}
           onClose={handleMappingClose}
           onSave={handleMappingSave}
           sourceApplication={mappingPanel.sourceApplication || undefined}
           mqttSource={mappingPanel.mqttSource || undefined}
+          targetType={mappingPanel.targetType}
           targetDestination={mappingPanel.targetDestination}
+          targetRestDestination={mappingPanel.targetRestDestination}
           sourceNodeId={mappingPanel.sourceNodeId}
           targetNodeId={mappingPanel.targetNodeId}
           existingConfig={mappingPanel.existingConfig || undefined}

@@ -59,6 +59,15 @@ interface StatsResponse {
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
+// Get auth headers
+function getAuthHeaders(): Record<string, string> {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('nexus_token') : null;
+    if (token) {
+        return { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    }
+    return { 'Content-Type': 'application/json' };
+}
+
 export default function LogsPage() {
     const [logs, setLogs] = useState<Log[]>([]);
     const [stats, setStats] = useState<LogStats | null>(null);
@@ -87,7 +96,9 @@ export default function LogsPage() {
             params.append('limit', limit.toString());
             params.append('offset', offset.toString());
 
-            const response = await fetch(`${API_BASE_URL}/api/logs?${params}`);
+            const response = await fetch(`${API_BASE_URL}/api/logs?${params}`, {
+                headers: getAuthHeaders()
+            });
             const data: LogsResponse = await response.json();
 
             if (data.success) {
@@ -103,7 +114,9 @@ export default function LogsPage() {
 
     const fetchStats = useCallback(async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/api/logs/stats`);
+            const response = await fetch(`${API_BASE_URL}/api/logs/stats`, {
+                headers: getAuthHeaders()
+            });
             const data: StatsResponse = await response.json();
 
             if (data.success) {

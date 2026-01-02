@@ -1,5 +1,25 @@
 const API_BASE_URL = 'http://localhost:8080';
 
+// Get auth headers for API requests
+function getAuthHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  const token = localStorage.getItem('nexus_token');
+  if (token) {
+    return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
+
+// Wrapper for fetch that includes auth headers
+async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...getAuthHeaders(),
+    ...options.headers,
+  };
+  return fetch(url, { ...options, headers });
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
@@ -60,7 +80,7 @@ export interface UpdateApplicationPayload {
 
 // Fetch all applications
 export async function fetchApplications(): Promise<ApplicationListResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/applications`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -76,7 +96,7 @@ export async function fetchApplications(): Promise<ApplicationListResponse> {
 
 // Fetch single application by ID
 export async function fetchApplicationById(id: number): Promise<ApiResponse<Application>> {
-  const response = await fetch(`${API_BASE_URL}/api/applications/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications/${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -92,7 +112,7 @@ export async function fetchApplicationById(id: number): Promise<ApiResponse<Appl
 
 // Create new application
 export async function createApplication(payload: CreateApplicationPayload): Promise<ApiResponse<Application>> {
-  const response = await fetch(`${API_BASE_URL}/api/applications`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -111,7 +131,7 @@ export async function createApplication(payload: CreateApplicationPayload): Prom
 
 // Update application
 export async function updateApplication(id: number, payload: UpdateApplicationPayload): Promise<ApiResponse<Application>> {
-  const response = await fetch(`${API_BASE_URL}/api/applications/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -130,7 +150,7 @@ export async function updateApplication(id: number, payload: UpdateApplicationPa
 
 // Delete application
 export async function deleteApplication(id: number): Promise<ApiResponse<null>> {
-  const response = await fetch(`${API_BASE_URL}/api/applications/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -148,7 +168,7 @@ export async function deleteApplication(id: number): Promise<ApiResponse<null>> 
 
 // Validate app key exists
 export async function validateAppKey(appKey: string): Promise<{ success: boolean; valid: boolean }> {
-  const response = await fetch(`${API_BASE_URL}/api/applications/validate/${appKey}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/applications/validate/${appKey}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -226,7 +246,7 @@ export interface TestConnectionResponse {
 
 // Fetch all destinations
 export async function fetchDestinations(): Promise<DestinationListResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -242,7 +262,7 @@ export async function fetchDestinations(): Promise<DestinationListResponse> {
 
 // Fetch single destination by ID
 export async function fetchDestinationById(id: number): Promise<ApiResponse<Destination>> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -258,7 +278,7 @@ export async function fetchDestinationById(id: number): Promise<ApiResponse<Dest
 
 // Create new destination
 export async function createDestination(payload: CreateDestinationPayload): Promise<ApiResponse<Destination>> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -277,7 +297,7 @@ export async function createDestination(payload: CreateDestinationPayload): Prom
 
 // Update destination
 export async function updateDestination(id: number, payload: UpdateDestinationPayload): Promise<ApiResponse<Destination>> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -296,7 +316,7 @@ export async function updateDestination(id: number, payload: UpdateDestinationPa
 
 // Delete destination
 export async function deleteDestination(id: number): Promise<ApiResponse<null>> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -314,7 +334,7 @@ export async function deleteDestination(id: number): Promise<ApiResponse<null>> 
 
 // Test database connection
 export async function testDestinationConnection(payload: TestConnectionPayload): Promise<TestConnectionResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/test`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -327,7 +347,7 @@ export async function testDestinationConnection(payload: TestConnectionPayload):
 
 // Toggle destination status (up/down)
 export async function toggleDestinationStatus(id: number): Promise<{ success: boolean; message: string; status: DestinationStatus }> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${id}/toggle`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${id}/toggle`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
@@ -367,7 +387,7 @@ export interface ColumnsResponse {
 
 // Fetch tables from destination database
 export async function fetchDestinationTables(destinationId: number): Promise<TablesResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${destinationId}/tables`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${destinationId}/tables`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -385,7 +405,7 @@ export async function fetchDestinationTables(destinationId: number): Promise<Tab
 
 // Fetch columns for a specific table from destination database
 export async function fetchTableColumns(destinationId: number, tableName: string): Promise<ColumnsResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/destinations/${destinationId}/tables/${tableName}/columns`, {
+  const response = await authFetch(`${API_BASE_URL}/api/destinations/${destinationId}/tables/${tableName}/columns`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -490,7 +510,7 @@ export interface WorkflowListResponse {
 
 // Fetch all workflows
 export async function fetchWorkflows(): Promise<WorkflowListResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/workflows`, {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -506,7 +526,7 @@ export async function fetchWorkflows(): Promise<WorkflowListResponse> {
 
 // Fetch single workflow by ID
 export async function fetchWorkflowById(id: number): Promise<ApiResponse<Workflow>> {
-  const response = await fetch(`${API_BASE_URL}/api/workflows/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows/${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -522,7 +542,7 @@ export async function fetchWorkflowById(id: number): Promise<ApiResponse<Workflo
 
 // Create new workflow
 export async function createWorkflow(payload: CreateWorkflowPayload): Promise<ApiResponse<Workflow>> {
-  const response = await fetch(`${API_BASE_URL}/api/workflows`, {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -541,7 +561,7 @@ export async function createWorkflow(payload: CreateWorkflowPayload): Promise<Ap
 
 // Update workflow
 export async function updateWorkflow(id: number, payload: UpdateWorkflowPayload): Promise<ApiResponse<Workflow>> {
-  const response = await fetch(`${API_BASE_URL}/api/workflows/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -560,7 +580,7 @@ export async function updateWorkflow(id: number, payload: UpdateWorkflowPayload)
 
 // Delete workflow
 export async function deleteWorkflow(id: number): Promise<ApiResponse<null>> {
-  const response = await fetch(`${API_BASE_URL}/api/workflows/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -647,7 +667,7 @@ export interface TestRestConnectionResponse {
 
 // Fetch all REST destinations
 export async function fetchRestDestinations(): Promise<RestDestinationListResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -663,7 +683,7 @@ export async function fetchRestDestinations(): Promise<RestDestinationListRespon
 
 // Fetch single REST destination by ID
 export async function fetchRestDestinationById(id: number): Promise<ApiResponse<RestDestination>> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -679,7 +699,7 @@ export async function fetchRestDestinationById(id: number): Promise<ApiResponse<
 
 // Create new REST destination
 export async function createRestDestination(payload: CreateRestDestinationPayload): Promise<ApiResponse<RestDestination>> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -698,7 +718,7 @@ export async function createRestDestination(payload: CreateRestDestinationPayloa
 
 // Update REST destination
 export async function updateRestDestination(id: number, payload: UpdateRestDestinationPayload): Promise<ApiResponse<RestDestination>> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
@@ -717,7 +737,7 @@ export async function updateRestDestination(id: number, payload: UpdateRestDesti
 
 // Delete REST destination
 export async function deleteRestDestination(id: number): Promise<ApiResponse<null>> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations/${id}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -735,7 +755,7 @@ export async function deleteRestDestination(id: number): Promise<ApiResponse<nul
 
 // Test REST endpoint connection
 export async function testRestConnection(payload: TestRestConnectionPayload): Promise<TestRestConnectionResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/test`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations/test`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -748,7 +768,7 @@ export async function testRestConnection(payload: TestRestConnectionPayload): Pr
 
 // Toggle REST destination status
 export async function toggleRestDestinationStatus(id: number): Promise<{ success: boolean; message: string; status: 'up' | 'down' }> {
-  const response = await fetch(`${API_BASE_URL}/api/rest-destinations/${id}/toggle`, {
+  const response = await authFetch(`${API_BASE_URL}/api/rest-destinations/${id}/toggle`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -795,7 +815,7 @@ export interface MQTTSourceListResponse {
 
 // Fetch all MQTT sources
 export async function fetchMqttSources(): Promise<MQTTSourceListResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/mqtt-sources`, {
+  const response = await authFetch(`${API_BASE_URL}/api/mqtt-sources`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
@@ -813,7 +833,7 @@ export async function fetchMqttSources(): Promise<MQTTSourceListResponse> {
 
 // Fetch MQTT source fields
 export async function fetchMqttSourceFields(sourceId: number): Promise<{ success: boolean; data: MQTTSourceField[] }> {
-  const response = await fetch(`${API_BASE_URL}/api/mqtt-sources/${sourceId}/fields`, {
+  const response = await authFetch(`${API_BASE_URL}/api/mqtt-sources/${sourceId}/fields`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',

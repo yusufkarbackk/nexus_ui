@@ -37,7 +37,10 @@ interface MappingPanelProps {
   // Either sourceApplication or mqttSource must be provided
   sourceApplication?: Application;
   mqttSource?: MQTTSource;
-  targetDestination: Destination;
+  // Target can be either database or REST
+  targetType: 'database' | 'rest';
+  targetDestination?: Destination | null;  // For database targets
+  targetRestDestination?: { id: number; name: string; baseUrl?: string } | null;  // For REST targets
   sourceNodeId: string;
   targetNodeId: string;
   existingConfig?: PipelineConfig;
@@ -49,7 +52,9 @@ export function MappingPanel({
   onSave,
   sourceApplication,
   mqttSource,
+  targetType,
   targetDestination,
+  targetRestDestination,
   sourceNodeId,
   targetNodeId,
   existingConfig,
@@ -64,8 +69,12 @@ export function MappingPanel({
   const [isLoadingColumns, setIsLoadingColumns] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch tables when panel opens
+  // Determine if this is a database target
+  const isDbTarget = targetType === 'database' && targetDestination;
+
+  // Fetch tables when panel opens (database targets only)
   const loadTables = useCallback(async () => {
+    if (!isDbTarget || !targetDestination) return;
     setIsLoadingTables(true);
     setError(null);
     try {
@@ -76,10 +85,11 @@ export function MappingPanel({
     } finally {
       setIsLoadingTables(false);
     }
-  }, [targetDestination.id]);
+  }, [isDbTarget, targetDestination]);
 
-  // Fetch columns when table is selected
+  // Fetch columns when table is selected (database targets only)
   const loadColumns = useCallback(async (tableName: string) => {
+    if (!isDbTarget || !targetDestination) return;
     if (!tableName) {
       setColumns([]);
       return;
@@ -94,19 +104,19 @@ export function MappingPanel({
     } finally {
       setIsLoadingColumns(false);
     }
-  }, [targetDestination.id]);
+  }, [isDbTarget, targetDestination]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && isDbTarget) {
       loadTables();
     }
-  }, [isOpen, loadTables]);
+  }, [isOpen, isDbTarget, loadTables]);
 
   useEffect(() => {
-    if (selectedTable) {
+    if (selectedTable && isDbTarget) {
       loadColumns(selectedTable);
     }
-  }, [selectedTable, loadColumns]);
+  }, [selectedTable, isDbTarget, loadColumns]);
 
   // Auto-map fields with same name
   const handleAutoMap = () => {
@@ -159,12 +169,25 @@ export function MappingPanel({
 
   // Handle save
   const handleSave = () => {
-    if (!selectedTable) {
-      setError('Please select a target table');
-      return;
+    // For database targets, require table and mappings
+    if (isDbTarget) {
+      if (!selectedTable) {
+        setError('Please select a target table');
+        return;
+      }
+      if (fieldMappings.length === 0) {
+        setError('Please add at least one field mapping');
+        return;
+      }
     }
-    if (fieldMappings.length === 0) {
-      setError('Please add at least one field mapping');
+
+    // Determine destination ID based on target type
+    const destId = isDbTarget
+      ? targetDestination?.id
+      : targetRestDestination?.id;
+
+    if (!destId) {
+      setError('No destination selected');
       return;
     }
 
@@ -174,10 +197,10 @@ export function MappingPanel({
       sourceType: mqttSource ? 'mqtt_source' : 'sender_app',
       applicationId: sourceApplication?.id,
       mqttSourceId: mqttSource?.id,
-      destinationType: 'database',
-      destinationId: targetDestination.id,
-      targetTable: selectedTable,
-      fieldMappings,
+      destinationType: isDbTarget ? 'database' : 'rest',
+      destinationId: destId,
+      targetTable: isDbTarget ? selectedTable : undefined,
+      fieldMappings: isDbTarget ? fieldMappings : [],
     };
 
     onSave(config);
@@ -192,6 +215,7 @@ export function MappingPanel({
     : (sourceApplication?.fields || []).map(f => ({ name: f.name, dataType: f.dataType }));
 
   const sourceName = mqttSource?.name || sourceApplication?.name || 'Unknown';
+  const targetName = targetDestination?.name || targetRestDestination?.name || 'Unknown';
   const isMQTT = !!mqttSource;
 
   return (
@@ -212,10 +236,14 @@ export function MappingPanel({
             </div>
             <ArrowRight className="w-5 h-5 text-slate-400" />
             <div className="flex items-center gap-2">
-              <div className="p-2 rounded-lg bg-teal-100">
-                <Database className="w-5 h-5 text-teal-600" />
+              <div className={`p-2 rounded-lg ${isDbTarget ? 'bg-teal-100' : 'bg-orange-100'}`}>
+                {isDbTarget ? (
+                  <Database className="w-5 h-5 text-teal-600" />
+                ) : (
+                  <Send className="w-5 h-5 text-orange-600" />
+                )}
               </div>
-              <span className="font-semibold text-slate-700">{targetDestination.name}</span>
+              <span className="font-semibold text-slate-700">{targetName}</span>
             </div>
           </div>
           <button
@@ -239,40 +267,52 @@ export function MappingPanel({
             </div>
           )}
 
-          {/* Table Selection */}
-          <div className="mb-6">
-            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
-              <Table className="w-4 h-4" />
-              Target Table
-            </label>
-            <div className="flex gap-2">
-              <select
-                value={selectedTable}
-                onChange={(e) => setSelectedTable(e.target.value)}
-                className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-slate-900 bg-white"
-                disabled={isLoadingTables}
-              >
-                <option value="" className="text-slate-500">Select a table...</option>
-                {tables.map((table) => (
-                  <option key={table.name} value={table.name} className="text-slate-900">
-                    {table.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={loadTables}
-                disabled={isLoadingTables}
-                className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
-                title="Refresh tables"
-              >
-                {isLoadingTables ? (
-                  <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
-                ) : (
-                  <RefreshCw className="w-5 h-5 text-slate-500" />
-                )}
-              </button>
+          {/* Table Selection (Database targets only) */}
+          {isDbTarget ? (
+            <div className="mb-6">
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                <Table className="w-4 h-4" />
+                Target Table
+              </label>
+              <div className="flex gap-2">
+                <select
+                  value={selectedTable}
+                  onChange={(e) => setSelectedTable(e.target.value)}
+                  className="flex-1 px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 outline-none text-slate-900 bg-white"
+                  disabled={isLoadingTables}
+                >
+                  <option value="" className="text-slate-500">Select a table...</option>
+                  {tables.map((table) => (
+                    <option key={table.name} value={table.name} className="text-slate-900">
+                      {table.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={loadTables}
+                  disabled={isLoadingTables}
+                  className="px-3 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50"
+                  title="Refresh tables"
+                >
+                  {isLoadingTables ? (
+                    <Loader2 className="w-5 h-5 animate-spin text-slate-500" />
+                  ) : (
+                    <RefreshCw className="w-5 h-5 text-slate-500" />
+                  )}
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="flex items-center gap-2 text-orange-800">
+                <Send className="w-5 h-5" />
+                <span className="font-semibold">REST API Destination</span>
+              </div>
+              <p className="text-sm text-orange-700 mt-2">
+                Data from the source will be sent to this REST endpoint. The payload will include all mapped source fields as JSON.
+              </p>
+            </div>
+          )}
 
           {/* Field Mappings */}
           {selectedTable && (
