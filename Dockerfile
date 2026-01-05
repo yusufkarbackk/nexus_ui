@@ -21,7 +21,8 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (needs dummy DATABASE_URL for build)
+ENV DATABASE_URL="mysql://user:password@localhost:3306/db"
 RUN npx prisma generate
 
 # Build Next.js app
