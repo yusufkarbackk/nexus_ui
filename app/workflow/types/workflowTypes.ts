@@ -11,6 +11,8 @@ export interface CustomNodeData {
   category: NodeCategory;
   config?: Record<string, unknown>;
   onDelete?: (id: string) => void;
+  // Index signature for React Flow compatibility
+  [key: string]: unknown;
 }
 
 // Sender App specific node data
@@ -141,6 +143,11 @@ export interface FieldMapping {
   pipelineId: number;
   sourceField: string;
   destinationColumn: string;
+  dataType?: string;       // string, number, boolean, datetime
+  transformType?: string;  // uppercase, lowercase, round, etc.
+  transformParam?: string; // parameter for transform
+  defaultValue?: string;   // default if source is null
+  nullHandling?: string;   // skip, use_default, required
   createdAt: string;
 }
 

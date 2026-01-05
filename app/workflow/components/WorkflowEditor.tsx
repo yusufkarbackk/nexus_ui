@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, DragEvent, useState, useEffect } from 'react';
+import React, { useCallback, useRef, DragEvent, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   ReactFlow,
@@ -34,10 +34,11 @@ import {
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
-import { createWorkflow, updateWorkflow, fetchWorkflowById, Application, Destination, Workflow } from '@/app/lib/api';
+import { createWorkflow, updateWorkflow, fetchWorkflowById, Application, Destination, Workflow, RestDestination } from '@/app/lib/api';
 import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
-const nodeTypes = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const nodeTypes: Record<string, React.ComponentType<any>> = {
   trigger: TriggerNode,
   action: ActionNode,
   logic: LogicNode,
@@ -154,10 +155,10 @@ function FlowCanvas() {
               }
             } else if (pipeline.application) {
               // Create sender app node if not already created
-              sourceNodeId = appNodeMap.get(pipeline.applicationId);
+              sourceNodeId = appNodeMap.get(pipeline.applicationId!);
               if (!sourceNodeId) {
                 sourceNodeId = `node-loaded-app-${pipeline.applicationId}`;
-                appNodeMap.set(pipeline.applicationId, sourceNodeId);
+                appNodeMap.set(pipeline.applicationId!, sourceNodeId);
 
                 newNodes.push({
                   id: sourceNodeId,
@@ -315,6 +316,7 @@ function FlowCanvas() {
           sourceNodeId: connection.source!,
           targetNodeId: connection.target!,
           sourceApplication: sourceData.application,
+          targetType: 'database',
           targetDestination: targetData.destination,
           pendingConnection: connection,
           existingConfig: null,
@@ -380,6 +382,7 @@ function FlowCanvas() {
           targetNodeId: connection.target!,
           sourceApplication: null,  // No sender app, use MQTT source
           mqttSource: sourceData.mqttSource,
+          targetType: 'database',
           targetDestination: targetData.destination,
           pendingConnection: connection,
           existingConfig: null,
@@ -507,6 +510,7 @@ function FlowCanvas() {
         sourceNodeId: '',
         targetNodeId: '',
         sourceApplication: null,
+        targetType: 'database',
         targetDestination: null,
         pendingConnection: null,
         existingConfig: null,
@@ -522,6 +526,7 @@ function FlowCanvas() {
       sourceNodeId: '',
       targetNodeId: '',
       sourceApplication: null,
+      targetType: 'database',
       targetDestination: null,
       pendingConnection: null,
       existingConfig: null,
@@ -659,9 +664,10 @@ function FlowCanvas() {
           } as MQTTSourceNodeData,
         };
       } else {
+        // Generic node (trigger, action, logic) - not senderApp, destination, restDestination, or mqttSource
         newNode = {
           id: generateNodeId(),
-          type: nodeData.type,
+          type: nodeData.type as 'trigger' | 'action' | 'logic',
           position,
           data: {
             label: nodeData.label,
@@ -669,7 +675,7 @@ function FlowCanvas() {
             category: nodeData.category,
             icon: nodeData.icon,
           } as CustomNodeData,
-        };
+        } as WorkflowNode;
       }
 
       setNodes((nds) => nds.concat(newNode));

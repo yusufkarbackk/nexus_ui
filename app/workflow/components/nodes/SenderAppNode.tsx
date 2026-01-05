@@ -1,11 +1,17 @@
 'use client';
 
-import { Handle, Position, useReactFlow, NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Send, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { SenderAppNodeData, nodeCategories } from '../../types/workflowTypes';
 
-export function SenderAppNode({ id, data, selected }: NodeProps<SenderAppNodeData>) {
+interface SenderAppNodeProps {
+  id: string;
+  data: SenderAppNodeData;
+  selected?: boolean;
+}
+
+export function SenderAppNode({ id, data, selected }: SenderAppNodeProps) {
   const { deleteElements } = useReactFlow();
   const [isExpanded, setIsExpanded] = useState(false);
   const categoryStyle = nodeCategories.senderApp;
@@ -73,7 +79,7 @@ export function SenderAppNode({ id, data, selected }: NodeProps<SenderAppNodeDat
         <p className="text-xs text-slate-500 leading-relaxed mb-2">
           {data.application?.description || 'Sender application'}
         </p>
-        
+
         {/* Fields section */}
         {fields.length > 0 && (
           <div>
@@ -87,7 +93,7 @@ export function SenderAppNode({ id, data, selected }: NodeProps<SenderAppNodeDat
               {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               {fields.length} field{fields.length !== 1 ? 's' : ''}
             </button>
-            
+
             {isExpanded && (
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {fields.map((field) => (

@@ -33,7 +33,7 @@ const iconMap: Record<string, LucideIcon> = {
 interface BaseNodeProps {
   id: string;
   data: CustomNodeData;
-  selected: boolean;
+  selected?: boolean;
   category: NodeCategory;
   showSourceHandle?: boolean;
   showTargetHandle?: boolean;

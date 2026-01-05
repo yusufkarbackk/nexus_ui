@@ -1,10 +1,15 @@
 'use client';
 
-import { NodeProps } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { CustomNodeData } from '../../types/workflowTypes';
 
-export function ActionNode({ id, data, selected }: NodeProps<CustomNodeData>) {
+interface ActionNodeProps {
+  id: string;
+  data: CustomNodeData;
+  selected?: boolean;
+}
+
+export function ActionNode({ id, data, selected }: ActionNodeProps) {
   return (
     <BaseNode
       id={id}

@@ -1,10 +1,15 @@
 'use client';
 
-import { NodeProps } from '@xyflow/react';
 import { BaseNode } from './BaseNode';
 import { CustomNodeData } from '../../types/workflowTypes';
 
-export function TriggerNode({ id, data, selected }: NodeProps<CustomNodeData>) {
+interface TriggerNodeProps {
+  id: string;
+  data: CustomNodeData;
+  selected?: boolean;
+}
+
+export function TriggerNode({ id, data, selected }: TriggerNodeProps) {
   return (
     <BaseNode
       id={id}

@@ -433,7 +433,11 @@ export interface FieldMappingPayload {
 export type DestinationType = 'database' | 'rest';
 
 export interface PipelinePayload {
-  applicationId: number;
+  // Source configuration
+  sourceType: 'sender_app' | 'mqtt_source';
+  applicationId?: number;  // For sender_app sources
+  mqttSourceId?: number;   // For mqtt_source sources
+  // Destination configuration  
   destinationType: DestinationType;
   // For database destinations
   destinationId?: number;
@@ -467,13 +471,22 @@ export interface FieldMapping {
   pipelineId: number;
   sourceField: string;
   destinationColumn: string;
+  dataType?: string;
+  transformType?: string;
+  transformParam?: string;
+  defaultValue?: string;
+  nullHandling?: string;
   createdAt: string;
 }
 
 export interface Pipeline {
   id: number;
   workflowId: number;
-  applicationId: number;
+  // Source type and IDs
+  sourceType?: 'sender_app' | 'mqtt_source';
+  applicationId?: number;
+  mqttSourceId?: number;
+  // Destination info
   destinationType: DestinationType;
   // For database destinations
   destinationId?: number;
@@ -485,6 +498,7 @@ export interface Pipeline {
   isActive: boolean;
   fieldMappings: FieldMapping[];
   application?: Application;
+  mqttSource?: MQTTSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -602,6 +616,23 @@ export async function deleteWorkflow(id: number): Promise<ApiResponse<null>> {
 
 export type HTTPMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type AuthType = 'none' | 'bearer' | 'api_key' | 'basic';
+
+// MQTT Source types used in Pipeline
+export interface MQTTSourceField {
+  id: number;
+  mqttSourceId: number;
+  name: string;
+  dataType: string;
+  description?: string;
+}
+
+export interface MQTTSource {
+  id: number;
+  name: string;
+  brokerUrl: string;
+  encryptionEnabled: boolean;
+  fields?: MQTTSourceField[];
+}
 
 export interface RestDestination {
   id: number;

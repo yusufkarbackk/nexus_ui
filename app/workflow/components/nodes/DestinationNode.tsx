@@ -1,10 +1,16 @@
 'use client';
 
-import { Handle, Position, useReactFlow, NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Database, X, Server } from 'lucide-react';
 import { DestinationNodeData, nodeCategories } from '../../types/workflowTypes';
 
-export function DestinationNode({ id, data, selected }: NodeProps<DestinationNodeData>) {
+interface DestinationNodeProps {
+  id: string;
+  data: DestinationNodeData;
+  selected?: boolean;
+}
+
+export function DestinationNode({ id, data, selected }: DestinationNodeProps) {
   const { deleteElements } = useReactFlow();
   const categoryStyle = nodeCategories.destination;
 
@@ -96,7 +102,7 @@ export function DestinationNode({ id, data, selected }: NodeProps<DestinationNod
         <p className="text-xs text-slate-500 leading-relaxed mb-2">
           {destination?.description || 'Destination database'}
         </p>
-        
+
         {/* Connection details */}
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs">

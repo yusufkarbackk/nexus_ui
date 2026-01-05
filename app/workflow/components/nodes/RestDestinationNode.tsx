@@ -1,10 +1,16 @@
 'use client';
 
-import { Handle, Position, useReactFlow, NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Globe, X, Zap, Key, Lock } from 'lucide-react';
 import { RestDestinationNodeData, nodeCategories } from '../../types/workflowTypes';
 
-export function RestDestinationNode({ id, data, selected }: NodeProps<RestDestinationNodeData>) {
+interface RestDestinationNodeProps {
+    id: string;
+    data: RestDestinationNodeData;
+    selected?: boolean;
+}
+
+export function RestDestinationNode({ id, data, selected }: RestDestinationNodeProps) {
     const { deleteElements } = useReactFlow();
     const categoryStyle = nodeCategories.restDestination;
 

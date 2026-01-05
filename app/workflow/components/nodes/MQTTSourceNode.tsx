@@ -1,11 +1,17 @@
 'use client';
 
-import { Handle, Position, useReactFlow, NodeProps } from '@xyflow/react';
+import { Handle, Position, useReactFlow } from '@xyflow/react';
 import { Wifi, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 import { MQTTSourceNodeData, nodeCategories } from '../../types/workflowTypes';
 
-export function MQTTSourceNode({ id, data, selected }: NodeProps<MQTTSourceNodeData>) {
+interface MQTTSourceNodeProps {
+    id: string;
+    data: MQTTSourceNodeData;
+    selected?: boolean;
+}
+
+export function MQTTSourceNode({ id, data, selected }: MQTTSourceNodeProps) {
     const { deleteElements } = useReactFlow();
     const [isExpanded, setIsExpanded] = useState(false);
     const categoryStyle = nodeCategories.mqttSource;
