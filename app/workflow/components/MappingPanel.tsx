@@ -21,6 +21,8 @@ import {
   fetchTableColumns,
   TableInfo,
   ColumnInfo,
+  RestDestination,
+  RestDestinationBodyField,
 } from '@/app/lib/api';
 import { FieldMappingConfig, PipelineConfig, MQTTSource, MQTTSourceField } from '../types/workflowTypes';
 
@@ -40,7 +42,7 @@ interface MappingPanelProps {
   // Target can be either database or REST
   targetType: 'database' | 'rest';
   targetDestination?: Destination | null;  // For database targets
-  targetRestDestination?: { id: number; name: string; baseUrl?: string } | null;  // For REST targets
+  targetRestDestination?: RestDestination | null;  // For REST targets (includes bodyFields)
   sourceNodeId: string;
   targetNodeId: string;
   existingConfig?: PipelineConfig;
@@ -71,6 +73,12 @@ export function MappingPanel({
 
   // Determine if this is a database target
   const isDbTarget = targetType === 'database' && targetDestination;
+
+  // Determine if this is a REST target
+  const isRestTarget = targetType === 'rest' && targetRestDestination;
+
+  // Get REST body fields if available
+  const restBodyFields: RestDestinationBodyField[] = targetRestDestination?.bodyFields || [];
 
   // Fetch tables when panel opens (database targets only)
   const loadTables = useCallback(async () => {
@@ -127,17 +135,34 @@ export function MappingPanel({
 
     const newMappings: FieldMappingConfig[] = [];
 
-    fields.forEach((field) => {
-      const matchingColumn = columns.find(
-        (col) => col.name.toLowerCase() === field.name.toLowerCase()
-      );
-      if (matchingColumn) {
-        newMappings.push({
-          sourceField: field.name,
-          destinationColumn: matchingColumn.name,
-        });
-      }
-    });
+    // For database targets, match with columns
+    if (isDbTarget) {
+      fields.forEach((field) => {
+        const matchingColumn = columns.find(
+          (col) => col.name.toLowerCase() === field.name.toLowerCase()
+        );
+        if (matchingColumn) {
+          newMappings.push({
+            sourceField: field.name,
+            destinationColumn: matchingColumn.name,
+          });
+        }
+      });
+    }
+    // For REST targets, match with body fields
+    else if (isRestTarget) {
+      fields.forEach((field) => {
+        const matchingBodyField = restBodyFields.find(
+          (bf) => bf.name.toLowerCase() === field.name.toLowerCase()
+        );
+        if (matchingBodyField) {
+          newMappings.push({
+            sourceField: field.name,
+            destinationColumn: matchingBodyField.name,
+          });
+        }
+      });
+    }
 
     setFieldMappings(newMappings);
   };
@@ -181,6 +206,18 @@ export function MappingPanel({
       }
     }
 
+    // For REST targets, validate required fields are mapped
+    if (isRestTarget && restBodyFields.length > 0) {
+      const requiredFields = restBodyFields.filter(f => f.required);
+      const unmappedRequired = requiredFields.filter(
+        rf => !fieldMappings.some(fm => fm.destinationColumn === rf.name)
+      );
+      if (unmappedRequired.length > 0) {
+        setError(`Please map required fields: ${unmappedRequired.map(f => f.name).join(', ')}`);
+        return;
+      }
+    }
+
     // Determine destination ID based on target type
     const destId = isDbTarget
       ? targetDestination?.id
@@ -198,9 +235,11 @@ export function MappingPanel({
       applicationId: sourceApplication?.id,
       mqttSourceId: mqttSource?.id,
       destinationType: isDbTarget ? 'database' : 'rest',
-      destinationId: destId,
+      // For database targets, use destinationId; for REST targets, use restDestinationId
+      destinationId: isDbTarget ? destId : undefined,
+      restDestinationId: isRestTarget ? destId : undefined,
       targetTable: isDbTarget ? selectedTable : undefined,
-      fieldMappings: isDbTarget ? fieldMappings : [],
+      fieldMappings: fieldMappings,  // Include for both db and rest
     };
 
     onSave(config);
@@ -303,18 +342,183 @@ export function MappingPanel({
               </div>
             </div>
           ) : (
-            <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
-              <div className="flex items-center gap-2 text-orange-800">
-                <Send className="w-5 h-5" />
-                <span className="font-semibold">REST API Destination</span>
+            <div className="mb-6">
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg mb-4">
+                <div className="flex items-center gap-2 text-orange-800">
+                  <Send className="w-5 h-5" />
+                  <span className="font-semibold">REST API Destination</span>
+                </div>
+                {targetRestDestination?.baseUrl && (
+                  <p className="text-sm text-orange-600 mt-1 font-mono truncate">
+                    {targetRestDestination.baseUrl}
+                  </p>
+                )}
               </div>
-              <p className="text-sm text-orange-700 mt-2">
-                Data from the source will be sent to this REST endpoint. The payload will include all mapped source fields as JSON.
-              </p>
+
+              {/* REST Body Field Mappings */}
+              {restBodyFields.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                      <Columns className="w-4 h-4" />
+                      Map Source Fields to Request Body
+                    </label>
+                    <button
+                      onClick={handleAutoMap}
+                      className="px-3 py-1.5 text-sm bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+                    >
+                      Auto-map matching fields
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    {/* Source Fields */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                        Source Fields ({sourceFields.length})
+                      </h4>
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                        {sourceFields.map((field) => {
+                          const mappedColumn = getMappedColumn(field.name);
+                          return (
+                            <div
+                              key={field.name}
+                              className={`
+                                flex items-center justify-between px-3 py-2 rounded-lg border
+                                ${mappedColumn
+                                  ? 'bg-green-50 border-green-200'
+                                  : 'bg-slate-50 border-slate-200'
+                                }
+                              `}
+                            >
+                              <div>
+                                <span className="font-medium text-sm text-slate-700">
+                                  {field.name}
+                                </span>
+                                <span className="ml-2 text-xs text-slate-400">
+                                  ({field.dataType})
+                                </span>
+                              </div>
+                              {mappedColumn && (
+                                <div className="flex items-center gap-2">
+                                  <ArrowRight className="w-4 h-4 text-green-500" />
+                                  <span className="text-xs font-medium text-green-700">
+                                    {mappedColumn}
+                                  </span>
+                                  <button
+                                    onClick={() => handleRemoveMapping(field.name)}
+                                    className="p-1 hover:bg-red-100 rounded"
+                                  >
+                                    <X className="w-3 h-3 text-red-500" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                        {sourceFields.length === 0 && (
+                          <p className="text-sm text-slate-400 text-center py-4">
+                            No fields defined in this application
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* REST Body Fields */}
+                    <div>
+                      <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+                        REST Body Fields ({restBodyFields.length})
+                      </h4>
+                      <div className="space-y-2 max-h-64 overflow-y-auto pr-2">
+                        {restBodyFields.map((bodyField) => {
+                          const isMapped = fieldMappings.some(
+                            (m) => m.destinationColumn === bodyField.name
+                          );
+                          const mappedFrom = fieldMappings.find(
+                            (m) => m.destinationColumn === bodyField.name
+                          )?.sourceField;
+                          return (
+                            <div
+                              key={bodyField.name}
+                              className={`
+                                px-3 py-2 rounded-lg border
+                                ${isMapped
+                                  ? 'bg-green-50 border-green-200'
+                                  : bodyField.required
+                                    ? 'bg-red-50 border-red-200'
+                                    : 'bg-slate-50 border-slate-200'
+                                }
+                              `}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="font-medium text-sm text-slate-700">
+                                    {bodyField.name}
+                                  </span>
+                                  {bodyField.required && (
+                                    <span className="ml-2 text-xs font-medium text-red-500">
+                                      *required
+                                    </span>
+                                  )}
+                                  <span className="ml-2 text-xs text-slate-400">
+                                    ({bodyField.type})
+                                  </span>
+                                </div>
+                                {isMapped && mappedFrom && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-green-700">
+                                      ← {mappedFrom}
+                                    </span>
+                                    <button
+                                      onClick={() => handleRemoveMapping(mappedFrom)}
+                                      className="p-1 hover:bg-red-100 rounded"
+                                    >
+                                      <X className="w-3 h-3 text-red-500" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              {bodyField.description && (
+                                <p className="text-xs text-slate-400 mt-1">{bodyField.description}</p>
+                              )}
+                              {!isMapped && (
+                                <select
+                                  className="mt-2 w-full text-xs px-2 py-1 border border-slate-200 rounded bg-white text-slate-900"
+                                  value=""
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      handleAddMapping(e.target.value, bodyField.name);
+                                    }
+                                  }}
+                                >
+                                  <option value="" className="text-slate-500">Map from source field...</option>
+                                  {sourceFields
+                                    .filter((f) => !getMappedColumn(f.name))
+                                    .map((field) => (
+                                      <option key={field.name} value={field.name} className="text-slate-900">
+                                        {field.name} ({field.dataType})
+                                      </option>
+                                    ))}
+                                </select>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 text-center py-4">
+                  No body fields defined for this REST destination.
+                  <br />
+                  Data will be sent as-is from the source.
+                </p>
+              )}
             </div>
           )}
 
-          {/* Field Mappings */}
+          {/* Field Mappings - Database only */}
           {selectedTable && (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -628,7 +832,7 @@ export function MappingPanel({
           </button>
           <button
             onClick={handleSave}
-            disabled={!selectedTable || fieldMappings.length === 0}
+            disabled={(isDbTarget && (!selectedTable || fieldMappings.length === 0)) || (!isDbTarget && !isRestTarget)}
             className="px-4 py-2 text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Save Mapping

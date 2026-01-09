@@ -125,7 +125,8 @@ function FlowCanvas() {
           let nodeIndex = 0;
           const appNodeMap = new Map<number, string>(); // applicationId -> nodeId
           const mqttNodeMap = new Map<number, string>(); // mqttSourceId -> nodeId
-          const destNodeMap = new Map<number, string>(); // destinationId -> nodeId
+          const dbDestNodeMap = new Map<number, string>(); // destinationId -> nodeId (database)
+          const restDestNodeMap = new Map<number, string>(); // restDestinationId -> nodeId (REST)
 
           workflow.pipelines?.forEach((pipeline, pipelineIndex) => {
             let sourceNodeId: string | undefined;
@@ -181,11 +182,11 @@ function FlowCanvas() {
             let targetNodeId: string | undefined;
 
             if (pipeline.destinationType === 'rest' && pipeline.restDestination) {
-              // REST destination
-              targetNodeId = destNodeMap.get(pipeline.restDestinationId || 0);
+              // REST destination - use separate map to avoid ID collision with database destinations
+              targetNodeId = restDestNodeMap.get(pipeline.restDestinationId || 0);
               if (!targetNodeId) {
                 targetNodeId = `node-loaded-rest-${pipeline.restDestinationId}`;
-                destNodeMap.set(pipeline.restDestinationId || 0, targetNodeId);
+                restDestNodeMap.set(pipeline.restDestinationId || 0, targetNodeId);
 
                 newNodes.push({
                   id: targetNodeId,
@@ -202,11 +203,11 @@ function FlowCanvas() {
                 });
               }
             } else if (pipeline.destination) {
-              // Database destination
-              targetNodeId = destNodeMap.get(pipeline.destinationId || 0);
+              // Database destination - use separate map to avoid ID collision with REST destinations
+              targetNodeId = dbDestNodeMap.get(pipeline.destinationId || 0);
               if (!targetNodeId) {
                 targetNodeId = `node-loaded-dest-${pipeline.destinationId}`;
-                destNodeMap.set(pipeline.destinationId || 0, targetNodeId);
+                dbDestNodeMap.set(pipeline.destinationId || 0, targetNodeId);
 
                 newNodes.push({
                   id: targetNodeId,
@@ -454,6 +455,11 @@ function FlowCanvas() {
   const handleMappingSave = useCallback(
     (config: PipelineConfig) => {
       const edgeId = `edge-${config.sourceNodeId}-${config.targetNodeId}`;
+      const isRest = config.destinationType === 'rest';
+      const edgeLabel = isRest
+        ? (nodes.find(n => n.id === config.targetNodeId)?.data?.label || 'REST API')
+        : config.targetTable;
+      const edgeColor = isRest ? '#f97316' : '#14b8a6';
 
       if (mappingPanel.pendingConnection) {
         // Creating new connection - Add the edge
@@ -463,9 +469,9 @@ function FlowCanvas() {
               ...mappingPanel.pendingConnection!,
               id: edgeId,
               animated: true,
-              style: { stroke: '#14b8a6', strokeWidth: 2 },
-              label: config.targetTable,
-              labelStyle: { fill: '#14b8a6', fontSize: 10 },
+              style: { stroke: edgeColor, strokeWidth: 2 },
+              label: edgeLabel,
+              labelStyle: { fill: edgeColor, fontSize: 10 },
               labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
               labelBgPadding: [4, 2] as [number, number],
               labelBgBorderRadius: 4,
@@ -481,7 +487,9 @@ function FlowCanvas() {
             if (edge.source === config.sourceNodeId && edge.target === config.targetNodeId) {
               return {
                 ...edge,
-                label: config.targetTable,
+                label: edgeLabel,
+                style: { stroke: edgeColor, strokeWidth: 2 },
+                labelStyle: { fill: edgeColor, fontSize: 10 },
                 data: { pipelineConfig: config },
               };
             }
@@ -516,7 +524,7 @@ function FlowCanvas() {
         existingConfig: null,
       });
     },
-    [mappingPanel.pendingConnection, setEdges]
+    [mappingPanel.pendingConnection, setEdges, nodes]
   );
 
   // Handle mapping panel close
@@ -741,7 +749,9 @@ function FlowCanvas() {
     try {
       let response;
 
-      if (isEditMode && workflowId) {
+      // Use workflowId to determine if we should update or create
+      // workflowId is set when loading existing workflow OR after first save of new workflow
+      if (workflowId) {
         // Update existing workflow
         response = await updateWorkflow(workflowId, {
           name: workflowName,

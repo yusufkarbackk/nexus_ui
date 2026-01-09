@@ -42,14 +42,15 @@ model applications {
   name                            String                            @db.VarChar(255)
   description                     String?                           @db.Text
   app_key                         String                            @unique(map: "applications_api_key_unique") @db.VarChar(255)
-  master_secret_encrypted         String?                           @db.VarChar(500) // Encrypted with NEXUS_ENCRYPTION_KEY
-  encryption_enabled              Boolean                           @default(false)
-  secret_version                  Int                               @default(1) // For key rotation
   created_at                      DateTime?                         @db.Timestamp(0)
   updated_at                      DateTime?                         @db.Timestamp(0)
+  encryption_enabled              Boolean                           @default(false)
+  master_secret_encrypted         String?                           @db.VarChar(500)
+  secret_version                  Int                               @default(1)
   application_fields              application_fields[]
   application_table_subscriptions application_table_subscriptions[]
   pipelines                       pipelines[]
+  agent_apps                      agent_apps[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -115,12 +116,12 @@ model field_mappings {
   pipeline_id        BigInt    @db.UnsignedBigInt
   source_field       String    @db.VarChar(255)
   destination_column String    @db.VarChar(255)
-  data_type          String?   @db.VarChar(50) // Target type: string, number, boolean, datetime
-  transform_type     String?   @db.VarChar(50) // Transform: uppercase, lowercase, round, etc.
-  transform_param    String?   @db.VarChar(255) // Transform parameter
-  default_value      String?   @db.VarChar(255) // Default if source is null
-  null_handling      String?   @default("skip") @db.VarChar(50) // skip, use_default, required
   created_at         DateTime  @default(now()) @db.Timestamp(0)
+  data_type          String?   @db.VarChar(50)
+  default_value      String?   @db.VarChar(255)
+  null_handling      String?   @default("skip") @db.VarChar(50)
+  transform_param    String?   @db.VarChar(255)
+  transform_type     String?   @db.VarChar(50)
   pipelines          pipelines @relation(fields: [pipeline_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "field_mappings_pipeline_id_foreign")
 
   @@index([pipeline_id], map: "field_mappings_pipeline_id_foreign")
@@ -138,11 +139,11 @@ model logs {
   received_at   DateTime?  @db.Timestamp(0)
   message       String     @default("") @db.VarChar(255)
   status        String     @default("pending") @db.VarChar(255)
-  retry_count   Int        @default(0)
-  workflow_id   BigInt?    @db.UnsignedBigInt
   created_at    DateTime?  @db.Timestamp(0)
   updated_at    DateTime?  @db.Timestamp(0)
-  workflows     workflows? @relation(fields: [workflow_id], references: [id], onDelete: SetNull)
+  retry_count   Int        @default(0)
+  workflow_id   BigInt?    @db.UnsignedBigInt
+  workflows     workflows? @relation(fields: [workflow_id], references: [id])
 
   @@index([data_id], map: "logs_data_id_index")
   @@index([status], map: "logs_status_index")
@@ -181,9 +182,7 @@ model personal_access_tokens {
 model pipelines {
   id                  BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
   workflow_id         BigInt                     @db.UnsignedBigInt
-  source_type         pipelines_source_type      @default(sender_app)
   application_id      BigInt?                    @db.UnsignedBigInt
-  mqtt_source_id      BigInt?                    @db.UnsignedBigInt
   database_configs_id BigInt?                    @db.UnsignedBigInt
   target_table        String?                    @db.VarChar(255)
   destination_type    pipelines_destination_type @default(database)
@@ -191,10 +190,12 @@ model pipelines {
   is_active           Boolean                    @default(true)
   created_at          DateTime?                  @db.Timestamp(0)
   updated_at          DateTime?                  @db.Timestamp(0)
+  mqtt_source_id      BigInt?                    @db.UnsignedBigInt
+  source_type         pipelines_source_type      @default(sender_app)
   field_mappings      field_mappings[]
+  mqtt_sources        mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
   rest_destinations   rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
   applications        applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
-  mqtt_sources        mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
   database_configs    database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
   workflows           workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
 
@@ -219,6 +220,7 @@ model rest_destinations {
   status          rest_destinations_status    @default(up)
   created_at      DateTime?                   @db.Timestamp(0)
   updated_at      DateTime?                   @db.Timestamp(0)
+  body_fields     Json?
   pipelines       pipelines[]
 
   @@index([auth_type], map: "idx_auth_type")
@@ -244,11 +246,11 @@ model users {
   email_verified_at DateTime?    @db.Timestamp(0)
   password          String       @db.VarChar(255)
   remember_token    String?      @db.VarChar(100)
-  role              users_role   @default(user)
-  is_active         Boolean      @default(true)
-  last_login        DateTime?    @db.Timestamp(0)
   created_at        DateTime?    @db.Timestamp(0)
   updated_at        DateTime?    @db.Timestamp(0)
+  is_active         Boolean      @default(true)
+  last_login        DateTime?    @db.Timestamp(0)
+  role              users_role   @default(user)
   audit_logs        audit_logs[]
 }
 
@@ -257,13 +259,13 @@ model workflows {
   name                      String               @db.VarChar(255)
   description               String?              @db.Text
   is_active                 Boolean              @default(true)
-  redis_retention_hours     Float                @default(168) // Supports decimals like 0.5 hours
-  delete_failed_immediately Boolean              @default(false) // true = discard failures immediately
   created_at                DateTime?            @db.Timestamp(0)
   updated_at                DateTime?            @db.Timestamp(0)
-  pipelines                 pipelines[]
+  redis_retention_hours     Float                @default(168)
+  delete_failed_immediately Boolean              @default(false)
   logs                      logs[]
   mqtt_subscriptions        mqtt_subscriptions[]
+  pipelines                 pipelines[]
 }
 
 /// MQTT broker connection configuration
@@ -271,21 +273,21 @@ model mqtt_sources {
   id                      BigInt               @id @default(autoincrement()) @db.UnsignedBigInt
   name                    String               @db.VarChar(255)
   description             String?              @db.Text
-  broker_url              String               @db.VarChar(500) // tcp://broker.example.com:1883
+  broker_url              String               @db.VarChar(500)
   username                String?              @db.VarChar(255)
-  password_encrypted      String?              @db.VarChar(500) // Encrypted password
+  password_encrypted      String?              @db.VarChar(500)
   client_id               String?              @db.VarChar(255)
   use_tls                 Boolean              @default(false)
-  ca_cert                 String?              @db.Text // For TLS certificate
-  encryption_enabled      Boolean              @default(false) // Enable Enigma encryption
-  master_secret_encrypted String?              @db.VarChar(500) // Master secret for decryption
-  secret_version          Int                  @default(1) // For key rotation
+  ca_cert                 String?              @db.Text
   is_active               Boolean              @default(true)
   status                  mqtt_sources_status  @default(disconnected)
   created_at              DateTime?            @db.Timestamp(0)
   updated_at              DateTime?            @db.Timestamp(0)
-  mqtt_subscriptions      mqtt_subscriptions[]
+  encryption_enabled      Boolean              @default(false)
+  master_secret_encrypted String?              @db.VarChar(500)
+  secret_version          Int                  @default(1)
   mqtt_source_fields      mqtt_source_fields[]
+  mqtt_subscriptions      mqtt_subscriptions[]
   pipelines               pipelines[]
 
   @@index([is_active], map: "mqtt_sources_is_active_index")
@@ -309,18 +311,38 @@ model mqtt_source_fields {
 model mqtt_subscriptions {
   id             BigInt                    @id @default(autoincrement()) @db.UnsignedBigInt
   mqtt_source_id BigInt                    @db.UnsignedBigInt
-  workflow_id    BigInt?                   @db.UnsignedBigInt // Optional - set when connected in workflow editor
-  topic_pattern  String                    @db.VarChar(500) // sensor/+/temperature or device/#
-  qos            Int                       @default(0) @db.TinyInt // 0, 1, or 2
+  workflow_id    BigInt?                   @db.UnsignedBigInt
+  topic_pattern  String                    @db.VarChar(500)
+  qos            Int                       @default(0) @db.TinyInt
   payload_format mqtt_subscriptions_format @default(json)
   is_active      Boolean                   @default(true)
   created_at     DateTime?                 @db.Timestamp(0)
   mqtt_sources   mqtt_sources              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade)
-  workflows      workflows?                @relation(fields: [workflow_id], references: [id], onDelete: SetNull)
+  workflows      workflows?                @relation(fields: [workflow_id], references: [id])
 
   @@unique([mqtt_source_id, topic_pattern], map: "unique_mqtt_topic")
   @@index([mqtt_source_id], map: "mqtt_subscriptions_source_id_index")
   @@index([workflow_id], map: "mqtt_subscriptions_workflow_id_index")
+}
+
+model audit_logs {
+  id          BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  event_type  audit_logs_event_type
+  action      String                @db.VarChar(50)
+  resource    String?               @db.VarChar(100)
+  resource_id String?               @db.VarChar(50)
+  user_id     BigInt?               @db.UnsignedBigInt
+  user_ip     String?               @db.VarChar(50)
+  user_agent  String?               @db.VarChar(500)
+  success     Boolean               @default(true)
+  message     String?               @db.Text
+  metadata    Json?
+  created_at  DateTime              @default(now()) @db.Timestamp(0)
+  users       users?                @relation(fields: [user_id], references: [id])
+
+  @@index([event_type])
+  @@index([user_id])
+  @@index([created_at])
 }
 
 enum mqtt_sources_status {
@@ -390,30 +412,6 @@ enum pipelines_source_type {
   mqtt_source
 }
 
-// =====================
-// Security & Auth Models
-// =====================
-
-model audit_logs {
-  id          BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
-  event_type  audit_logs_event_type
-  action      String                @db.VarChar(50)
-  resource    String?               @db.VarChar(100)
-  resource_id String?               @db.VarChar(50)
-  user_id     BigInt?               @db.UnsignedBigInt
-  user_ip     String?               @db.VarChar(50)
-  user_agent  String?               @db.VarChar(500)
-  success     Boolean               @default(true)
-  message     String?               @db.Text
-  metadata    Json?
-  created_at  DateTime              @default(now()) @db.Timestamp(0)
-  users       users?                @relation(fields: [user_id], references: [id], onDelete: SetNull)
-
-  @@index([event_type])
-  @@index([user_id])
-  @@index([created_at])
-}
-
 enum users_role {
   admin
   user
@@ -424,4 +422,44 @@ enum audit_logs_event_type {
   ADMIN
   SECURITY
   DATA
+}
+
+// =====================
+// Agent Registration Models
+// =====================
+
+/// Nexus Agent - for auto-sync of app credentials
+model agents {
+  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  name         String        @db.VarChar(255)
+  token        String        @unique(map: "agents_token_unique") @db.VarChar(64)
+  description  String?       @db.Text
+  status       agents_status @default(active)
+  last_seen_at DateTime?     @db.Timestamp(0)
+  ip_address   String?       @db.VarChar(45)
+  created_at   DateTime?     @db.Timestamp(0)
+  updated_at   DateTime?     @db.Timestamp(0)
+  agent_apps   agent_apps[]
+
+  @@index([status], map: "agents_status_index")
+}
+
+/// Links agents to applications they can sync
+model agent_apps {
+  id             BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  agent_id       BigInt       @db.UnsignedBigInt
+  application_id BigInt       @db.UnsignedBigInt
+  created_at     DateTime?    @db.Timestamp(0)
+  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  applications   applications @relation(fields: [application_id], references: [id], onDelete: Cascade)
+
+  @@unique([agent_id, application_id], map: "unique_agent_app")
+  @@index([agent_id], map: "agent_apps_agent_id_index")
+  @@index([application_id], map: "agent_apps_application_id_index")
+}
+
+enum agents_status {
+  active
+  inactive
+  revoked
 }

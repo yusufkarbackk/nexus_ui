@@ -17,6 +17,9 @@ import {
     Key,
     Zap,
     Clock,
+    Plus,
+    Trash2,
+    FileJson,
 } from 'lucide-react';
 import {
     createRestDestination,
@@ -63,6 +66,37 @@ export function RestDestinationForm() {
     const [basicPassword, setBasicPassword] = useState(''); // For basic
     const [timeoutSeconds, setTimeoutSeconds] = useState(30);
 
+    // Body fields state
+    interface BodyField {
+        id: string;
+        name: string;
+        type: 'string' | 'number' | 'boolean' | 'json';
+        required: boolean;
+        description: string;
+    }
+    const [bodyFields, setBodyFields] = useState<BodyField[]>([]);
+
+    // Body field helpers
+    const addBodyField = () => {
+        setBodyFields([...bodyFields, {
+            id: crypto.randomUUID(),
+            name: '',
+            type: 'string',
+            required: false,
+            description: '',
+        }]);
+    };
+
+    const updateBodyField = (id: string, updates: Partial<BodyField>) => {
+        setBodyFields(bodyFields.map(field =>
+            field.id === id ? { ...field, ...updates } : field
+        ));
+    };
+
+    const removeBodyField = (id: string) => {
+        setBodyFields(bodyFields.filter(field => field.id !== id));
+    };
+
     // UI state
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
@@ -95,6 +129,16 @@ export function RestDestinationForm() {
                     setHeaders(dest.headers || '');
                     setAuthType(dest.authType);
                     setTimeoutSeconds(dest.timeoutSeconds);
+                    // Load body fields if present
+                    if (dest.bodyFields && Array.isArray(dest.bodyFields)) {
+                        setBodyFields(dest.bodyFields.map(f => ({
+                            id: crypto.randomUUID(),
+                            name: f.name,
+                            type: f.type,
+                            required: f.required,
+                            description: f.description || '',
+                        })));
+                    }
                     // Auth config is not returned for security
                 } else {
                     setError(response.message || 'Failed to load REST destination');
@@ -157,12 +201,19 @@ export function RestDestinationForm() {
 
             if (isEditMode && editId) {
                 // Update existing destination
+                const bodyFieldsPayload = bodyFields.filter(f => f.name.trim()).map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    required: f.required,
+                    description: f.description,
+                }));
                 response = await updateRestDestination(parseInt(editId), {
                     name,
                     description: description || undefined,
                     baseUrl,
                     method,
                     headers: headers || undefined,
+                    bodyFields: bodyFieldsPayload.length > 0 ? bodyFieldsPayload : undefined,
                     authType,
                     authConfig: getAuthConfig(),
                     timeoutSeconds,
@@ -178,12 +229,19 @@ export function RestDestinationForm() {
                 }
             } else {
                 // Create new destination
+                const bodyFieldsPayload = bodyFields.filter(f => f.name.trim()).map(f => ({
+                    name: f.name,
+                    type: f.type,
+                    required: f.required,
+                    description: f.description,
+                }));
                 const payload: CreateRestDestinationPayload = {
                     name,
                     description: description || undefined,
                     baseUrl,
                     method,
                     headers: headers || undefined,
+                    bodyFields: bodyFieldsPayload.length > 0 ? bodyFieldsPayload : undefined,
                     authType,
                     authConfig: getAuthConfig(),
                     timeoutSeconds,
@@ -518,6 +576,97 @@ export function RestDestinationForm() {
                                             className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
                                         />
                                     </div>
+                                </div>
+                            )}
+                        </section>
+
+                        {/* Request Body Fields */}
+                        <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                                    <FileJson className="w-5 h-5 text-slate-400" />
+                                    <h2 className="text-lg font-semibold text-white">Request Body Fields</h2>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={addBodyField}
+                                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-orange-400 hover:text-orange-300 hover:bg-orange-500/10 rounded-lg transition-colors"
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    Add Field
+                                </button>
+                            </div>
+
+                            <p className="text-sm text-slate-400 mb-4">
+                                Define the fields expected in the request body. You can map source data to these fields in the workflow editor.
+                            </p>
+
+                            {bodyFields.length === 0 ? (
+                                <div className="text-center py-8 border border-dashed border-slate-700 rounded-lg">
+                                    <p className="text-slate-500 text-sm">No body fields defined.</p>
+                                    <p className="text-slate-600 text-xs mt-1">Click &quot;Add Field&quot; to define request body structure.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {bodyFields.map((field, index) => (
+                                        <div key={field.id} className="p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                                            <div className="grid grid-cols-12 gap-3 items-start">
+                                                <div className="col-span-4">
+                                                    <label className="block text-xs text-slate-400 mb-1">Field Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={field.name}
+                                                        onChange={(e) => updateBodyField(field.id, { name: e.target.value })}
+                                                        placeholder="e.g., temperature"
+                                                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    />
+                                                </div>
+                                                <div className="col-span-2">
+                                                    <label className="block text-xs text-slate-400 mb-1">Type</label>
+                                                    <select
+                                                        value={field.type}
+                                                        onChange={(e) => updateBodyField(field.id, { type: e.target.value as BodyField['type'] })}
+                                                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    >
+                                                        <option value="string">String</option>
+                                                        <option value="number">Number</option>
+                                                        <option value="boolean">Boolean</option>
+                                                        <option value="json">JSON</option>
+                                                    </select>
+                                                </div>
+                                                <div className="col-span-4">
+                                                    <label className="block text-xs text-slate-400 mb-1">Description</label>
+                                                    <input
+                                                        type="text"
+                                                        value={field.description}
+                                                        onChange={(e) => updateBodyField(field.id, { description: e.target.value })}
+                                                        placeholder="Optional description"
+                                                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-orange-500"
+                                                    />
+                                                </div>
+                                                <div className="col-span-1 flex items-end pb-1">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={field.required}
+                                                            onChange={(e) => updateBodyField(field.id, { required: e.target.checked })}
+                                                            className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-orange-500 focus:ring-orange-500"
+                                                        />
+                                                        <span className="text-xs text-slate-400">Req</span>
+                                                    </label>
+                                                </div>
+                                                <div className="col-span-1 flex items-end justify-end pb-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeBodyField(field.id)}
+                                                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
                         </section>

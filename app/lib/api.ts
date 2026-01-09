@@ -11,13 +11,28 @@ function getAuthHeaders(): Record<string, string> {
 }
 
 // Wrapper for fetch that includes auth headers
+// Handles session expiry by clearing storage and redirecting to login
 async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const headers = {
     'Content-Type': 'application/json',
     ...getAuthHeaders(),
     ...options.headers,
   };
-  return fetch(url, { ...options, headers });
+  const response = await fetch(url, { ...options, headers });
+
+  // Handle session expiry - clear storage and redirect
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('nexus_token');
+      localStorage.removeItem('nexus_user');
+      // Redirect to login if not already there
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
+    }
+  }
+
+  return response;
 }
 
 export interface ApiResponse<T> {
@@ -634,6 +649,13 @@ export interface MQTTSource {
   fields?: MQTTSourceField[];
 }
 
+export interface RestDestinationBodyField {
+  name: string;
+  type: 'string' | 'number' | 'boolean' | 'json';
+  required: boolean;
+  description: string;
+}
+
 export interface RestDestination {
   id: number;
   name: string;
@@ -641,6 +663,7 @@ export interface RestDestination {
   baseUrl: string;
   method: HTTPMethod;
   headers: string | null;  // JSON string
+  bodyFields: RestDestinationBodyField[] | null;
   authType: AuthType;
   timeoutSeconds: number;
   status: 'up' | 'down';
@@ -661,6 +684,7 @@ export interface CreateRestDestinationPayload {
   baseUrl: string;
   method: HTTPMethod;
   headers?: string;
+  bodyFields?: RestDestinationBodyField[];
   authType: AuthType;
   authConfig?: string;  // JSON string with auth details
   timeoutSeconds?: number;
@@ -672,6 +696,7 @@ export interface UpdateRestDestinationPayload {
   baseUrl?: string;
   method?: HTTPMethod;
   headers?: string;
+  bodyFields?: RestDestinationBodyField[];
   authType?: AuthType;
   authConfig?: string;
   timeoutSeconds?: number;
@@ -879,3 +904,114 @@ export async function fetchMqttSourceFields(sourceId: number): Promise<{ success
 
   return data;
 }
+
+// ====================
+// Agent API
+// ====================
+
+export interface Agent {
+  id: number;
+  name: string;
+  token: string;
+  description: string | null;
+  status: 'active' | 'inactive' | 'revoked';
+  lastSeenAt: string | null;
+  ipAddress: string | null;
+  createdAt: string;
+  updatedAt: string;
+  apps?: AgentApp[];
+  appCount?: number;
+}
+
+export interface AgentApp {
+  id: number;
+  name: string;
+  appKey: string;
+  assignedAt: string;
+}
+
+export interface AgentListResponse {
+  success: boolean;
+  message: string;
+  data: Agent[];
+  total: number;
+}
+
+export interface CreateAgentPayload {
+  name: string;
+  description?: string;
+}
+
+export interface UpdateAgentPayload {
+  name: string;
+  description?: string;
+  status: 'active' | 'inactive' | 'revoked';
+}
+
+// Fetch all agents
+export async function fetchAgents(): Promise<AgentListResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Create a new agent
+export async function createAgent(payload: CreateAgentPayload): Promise<ApiResponse<Agent>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+// Update an agent
+export async function updateAgent(id: number, payload: UpdateAgentPayload): Promise<ApiResponse<Agent>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+// Delete an agent
+export async function deleteAgent(id: number): Promise<ApiResponse<void>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${id}`, {
+    method: 'DELETE',
+  });
+  return response.json();
+}
+
+// Get agent by ID with apps
+export async function fetchAgentById(id: number): Promise<ApiResponse<Agent>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${id}`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Assign app to agent
+export async function assignAppToAgent(agentId: number, applicationId: number): Promise<ApiResponse<void>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${agentId}/apps`, {
+    method: 'POST',
+    body: JSON.stringify({ application_id: applicationId }),
+  });
+  return response.json();
+}
+
+// Unassign app from agent
+export async function unassignAppFromAgent(agentId: number, applicationId: number): Promise<ApiResponse<void>> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${agentId}/apps/${applicationId}`, {
+    method: 'DELETE',
+  });
+  return response.json();
+}
+
+// Get apps assigned to agent
+export async function fetchAgentApps(agentId: number): Promise<{ success: boolean; data: AgentApp[] }> {
+  const response = await authFetch(`${API_BASE_URL}/api/agents/${agentId}/apps`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+

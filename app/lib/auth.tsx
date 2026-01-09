@@ -98,6 +98,39 @@ export function useAuth() {
     return context;
 }
 
+// Hook that redirects to login if not authenticated
+export function useRequireAuth() {
+    const { isAuthenticated, isLoading } = useAuth();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (!isLoading && !isAuthenticated) {
+            router.push('/login');
+        }
+    }, [isAuthenticated, isLoading, router]);
+
+    return { isAuthenticated, isLoading };
+}
+
+// Component wrapper for protected pages
+export function ProtectedRoute({ children }: { children: ReactNode }) {
+    const { isAuthenticated, isLoading } = useRequireAuth();
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-950">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
+            </div>
+        );
+    }
+
+    if (!isAuthenticated) {
+        return null; // Will redirect via useRequireAuth
+    }
+
+    return <>{children}</>;
+}
+
 // Helper to get auth header for API calls
 export function getAuthHeader(): Record<string, string> {
     const token = localStorage.getItem('nexus_token');

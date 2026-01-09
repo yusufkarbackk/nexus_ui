@@ -439,6 +439,19 @@ export default function MQTTSourcesPage() {
                                     )}
                                 </div>
 
+                                {/* Source ID for customers */}
+                                <div className="mb-3 flex items-center gap-2 p-2 bg-slate-900/50 rounded-lg">
+                                    <span className="text-slate-500 text-xs">Source ID:</span>
+                                    <code className="text-cyan-400 text-xs font-mono flex-1">{source.id}</code>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(String(source.id)); }}
+                                        className="p-1 hover:bg-slate-700 rounded transition"
+                                        title="Copy Source ID"
+                                    >
+                                        <Copy className="w-3 h-3 text-slate-400" />
+                                    </button>
+                                </div>
+
                                 <div className="flex gap-2 pt-3 border-t border-slate-700">
                                     <button
                                         onClick={() => loadSourceDetails(source.id)}
