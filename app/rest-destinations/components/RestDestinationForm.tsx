@@ -76,10 +76,19 @@ export function RestDestinationForm() {
     }
     const [bodyFields, setBodyFields] = useState<BodyField[]>([]);
 
+    // Generate unique ID (fallback for HTTP where crypto.randomUUID is not available)
+    const generateId = () => {
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return crypto.randomUUID();
+        }
+        // Fallback for HTTP contexts
+        return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 11);
+    };
+
     // Body field helpers
     const addBodyField = () => {
         setBodyFields([...bodyFields, {
-            id: crypto.randomUUID(),
+            id: generateId(),
             name: '',
             type: 'string',
             required: false,
