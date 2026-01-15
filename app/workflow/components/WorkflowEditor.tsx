@@ -994,7 +994,7 @@ function FlowCanvas() {
                       className="w-16 px-2 py-1 bg-slate-700 text-white text-sm rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
                       title="Hours to keep failed messages (e.g., 0.5 = 30 minutes)"
                     />
-                    <span className="text-xs text-slate-400">hrs</span>
+                    <span className="text-xs text-slate-400">minutes</span>
                   </div>
                 )}
               </div>
