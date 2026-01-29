@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode } from './nodes';
+import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode, SapDestinationNode } from './nodes';
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
 import {
@@ -30,6 +30,7 @@ import {
   DestinationNodeData,
   RestDestinationNodeData,
   MQTTSourceNodeData,
+  SapDestinationNodeData,
   MQTTSource,
   PipelineConfig,
   WorkflowEdge,
@@ -46,6 +47,7 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   destination: DestinationNode,
   restDestination: RestDestinationNode,
   mqttSource: MQTTSourceNode,
+  sapDestination: SapDestinationNode,
 };
 
 let nodeIdCounter = 1;
@@ -200,6 +202,28 @@ function FlowCanvas() {
                     restDestinationId: pipeline.restDestination.id,
                     restDestination: pipeline.restDestination,
                   } as RestDestinationNodeData,
+                });
+              }
+            } else if (pipeline.destinationType === 'sap' && pipeline.sapDestination) {
+              // SAP destination
+              const sapDestNodeMap = new Map<number, string>();
+              targetNodeId = sapDestNodeMap.get(pipeline.sapDestinationId || 0);
+              if (!targetNodeId) {
+                targetNodeId = `node-loaded-sap-${pipeline.sapDestinationId}`;
+                sapDestNodeMap.set(pipeline.sapDestinationId || 0, targetNodeId);
+
+                newNodes.push({
+                  id: targetNodeId,
+                  type: 'sapDestination',
+                  position: { x: 500, y: 100 + ((nodeIndex - appNodeMap.size) * 200) },
+                  data: {
+                    label: pipeline.sapDestination.name,
+                    description: `SAP ODBC - ${pipeline.sapDestination.dsn_name}`,
+                    category: 'sapDestination',
+                    icon: 'server',
+                    sapDestinationId: pipeline.sapDestination.id,
+                    sapDestination: pipeline.sapDestination,
+                  } as SapDestinationNodeData,
                 });
               }
             } else if (pipeline.destination) {
@@ -419,6 +443,55 @@ function FlowCanvas() {
               style: { stroke: '#f97316', strokeWidth: 2 },
               label: targetData.restDestination?.name || 'REST API',
               labelStyle: { fill: '#f97316', fontSize: 10 },
+              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+              labelBgPadding: [4, 2] as [number, number],
+              labelBgBorderRadius: 4,
+              data: { pipelineConfig: config },
+            },
+            eds
+          )
+        );
+
+        // Store the pipeline config
+        setPipelineConfigs((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(edgeId, config);
+          return newMap;
+        });
+      } else if (
+        (sourceNode?.type === 'senderApp' || sourceNode?.type === 'mqttSource') &&
+        targetNode?.type === 'sapDestination'
+      ) {
+        // Sender App or MQTT -> SAP destination connection
+        const sourceData = sourceNode.data as SenderAppNodeData | MQTTSourceNodeData;
+        const targetData = targetNode.data as SapDestinationNodeData;
+
+        const edgeId = `edge-${connection.source}-${connection.target}`;
+
+        // Create the pipeline config for SAP destination
+        const config: PipelineConfig = {
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          sourceType: sourceNode.type === 'mqttSource' ? 'mqtt_source' : 'sender_app',
+          ...(sourceNode.type === 'mqttSource'
+            ? { mqttSourceId: (sourceData as MQTTSourceNodeData).mqttSource.id }
+            : { applicationId: (sourceData as SenderAppNodeData).application.id }
+          ),
+          destinationType: 'sap',
+          sapDestinationId: targetData.sapDestinationId,
+          fieldMappings: [], // SAP uses query params, not field mappings
+        };
+
+        // Add the edge with SAP styling (rose color)
+        setEdges((eds) =>
+          addEdge(
+            {
+              ...connection,
+              id: edgeId,
+              animated: true,
+              style: { stroke: '#f43f5e', strokeWidth: 2 },
+              label: targetData.sapDestination?.name || 'SAP Query',
+              labelStyle: { fill: '#f43f5e', fontSize: 10 },
               labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
               labelBgPadding: [4, 2] as [number, number],
               labelBgBorderRadius: 4,
@@ -671,6 +744,21 @@ function FlowCanvas() {
             mqttSource: nodeData.mqttSource,
           } as MQTTSourceNodeData,
         };
+      } else if (nodeData.type === 'sapDestination' && nodeData.sapDestination) {
+        // Handle SAP destination drop
+        newNode = {
+          id: generateNodeId(),
+          type: 'sapDestination',
+          position,
+          data: {
+            label: nodeData.label,
+            description: nodeData.description,
+            category: 'sapDestination',
+            icon: nodeData.icon,
+            sapDestinationId: nodeData.sapDestinationId!,
+            sapDestination: nodeData.sapDestination,
+          } as SapDestinationNodeData,
+        };
       } else {
         // Generic node (trigger, action, logic) - not senderApp, destination, restDestination, or mqttSource
         newNode = {
@@ -716,13 +804,19 @@ function FlowCanvas() {
       ),
       destinationType: config.destinationType || 'database',
       // Database destination fields
-      ...(config.destinationType !== 'rest' && {
+      ...(config.destinationType === 'database' && {
         destinationId: config.destinationId,
         targetTable: config.targetTable,
       }),
       // REST destination fields
       ...(config.destinationType === 'rest' && {
         restDestinationId: config.restDestinationId,
+      }),
+      // SAP destination fields
+      ...(config.destinationType === 'sap' && {
+        sapDestinationId: config.sapDestinationId,
+        sapQuery: config.sapQuery,
+        sapQueryType: config.sapQueryType,
       }),
       isActive: true,
       fieldMappings: config.fieldMappings.map((fm) => ({

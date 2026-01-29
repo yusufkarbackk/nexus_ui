@@ -39,6 +39,7 @@ export default function AgentsPage() {
     const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
     const [newAgentName, setNewAgentName] = useState('');
     const [newAgentDesc, setNewAgentDesc] = useState('');
+    const [newAgentType, setNewAgentType] = useState('');
     const [copiedToken, setCopiedToken] = useState<number | null>(null);
     const [createdAgent, setCreatedAgent] = useState<Agent | null>(null);
     const [assignedApps, setAssignedApps] = useState<AgentApp[]>([]);
@@ -73,11 +74,13 @@ export default function AgentsPage() {
             const response = await createAgent({
                 name: newAgentName,
                 description: newAgentDesc || undefined,
+                agent_type: newAgentType || undefined,
             });
             if (response.success && response.data) {
                 setCreatedAgent(response.data);
                 setNewAgentName('');
                 setNewAgentDesc('');
+                setNewAgentType('');
                 loadData();
             }
         } catch (error) {
@@ -366,6 +369,19 @@ export default function AgentsPage() {
                                     />
                                 </div>
                                 <div>
+                                    <label className="block text-white/70 text-sm mb-2">Agent Type</label>
+                                    <select
+                                        value={newAgentType}
+                                        onChange={(e) => setNewAgentType(e.target.value)}
+                                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                                    >
+                                        <option value="" className="bg-slate-800">Select type (optional)</option>
+                                        <option value="sender" className="bg-slate-800">Sender - Push data to Nexus</option>
+                                        <option value="receiver" className="bg-slate-800">Receiver - Receive encrypted data</option>
+                                        <option value="query" className="bg-slate-800">Query - Execute database queries</option>
+                                    </select>
+                                </div>
+                                <div>
                                     <label className="block text-white/70 text-sm mb-2">Description (optional)</label>
                                     <textarea
                                         value={newAgentDesc}
@@ -379,8 +395,8 @@ export default function AgentsPage() {
                                     onClick={handleCreateAgent}
                                     disabled={!newAgentName.trim()}
                                     className={`w-full py-2 rounded-lg font-medium transition-all ${newAgentName.trim()
-                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white'
-                                            : 'bg-white/10 text-white/30 cursor-not-allowed'
+                                        ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white'
+                                        : 'bg-white/10 text-white/30 cursor-not-allowed'
                                         }`}
                                 >
                                     Create Agent

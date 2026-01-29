@@ -47,10 +47,10 @@ model applications {
   encryption_enabled              Boolean                           @default(false)
   master_secret_encrypted         String?                           @db.VarChar(500)
   secret_version                  Int                               @default(1)
+  agent_apps                      agent_apps[]
   application_fields              application_fields[]
   application_table_subscriptions application_table_subscriptions[]
   pipelines                       pipelines[]
-  agent_apps                      agent_apps[]
 }
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
@@ -180,26 +180,30 @@ model personal_access_tokens {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model pipelines {
-  id                  BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
-  workflow_id         BigInt                     @db.UnsignedBigInt
-  application_id      BigInt?                    @db.UnsignedBigInt
-  database_configs_id BigInt?                    @db.UnsignedBigInt
-  target_table        String?                    @db.VarChar(255)
-  destination_type    pipelines_destination_type @default(database)
-  rest_destination_id BigInt?                    @db.UnsignedBigInt
-  is_active           Boolean                    @default(true)
-  created_at          DateTime?                  @db.Timestamp(0)
-  updated_at          DateTime?                  @db.Timestamp(0)
-  mqtt_source_id      BigInt?                    @db.UnsignedBigInt
-  source_type         pipelines_source_type      @default(sender_app)
-  field_mappings      field_mappings[]
-  mqtt_sources        mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
-  rest_destinations   rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
-  applications        applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
-  database_configs    database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
-  workflows           workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
+  id                   BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
+  workflow_id          BigInt                     @db.UnsignedBigInt
+  application_id       BigInt?                    @db.UnsignedBigInt
+  database_configs_id  BigInt?                    @db.UnsignedBigInt
+  target_table         String?                    @db.VarChar(255)
+  destination_type     pipelines_destination_type @default(database)
+  rest_destination_id  BigInt?                    @db.UnsignedBigInt
+  is_active            Boolean                    @default(true)
+  created_at           DateTime?                  @db.Timestamp(0)
+  updated_at           DateTime?                  @db.Timestamp(0)
+  mqtt_source_id       BigInt?                    @db.UnsignedBigInt
+  source_type          pipelines_source_type      @default(sender_app)
+  sap_destination_id   BigInt?                    @db.UnsignedBigInt
+  field_mappings       field_mappings[]
+  mqtt_sources         mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
+  rest_destinations    rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
+  sap_destinations     sap_destinations?          @relation(fields: [sap_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_sap_destination")
+  applications         applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
+  database_configs     database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
+  workflows            workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
+  sap_pipeline_configs sap_pipeline_configs[]
 
   @@index([rest_destination_id], map: "fk_pipelines_rest_destination")
+  @@index([sap_destination_id], map: "fk_pipelines_sap_destination")
   @@index([application_id], map: "pipelines_application_id_foreign")
   @@index([mqtt_source_id], map: "fk_pipelines_mqtt_source")
   @@index([database_configs_id], map: "pipelines_database_configs_id_foreign")
@@ -345,6 +349,77 @@ model audit_logs {
   @@index([created_at])
 }
 
+/// Links agents to applications they can sync
+model agent_apps {
+  id             BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  agent_id       BigInt       @db.UnsignedBigInt
+  application_id BigInt       @db.UnsignedBigInt
+  created_at     DateTime?    @db.Timestamp(0)
+  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+  applications   applications @relation(fields: [application_id], references: [id], onDelete: Cascade)
+
+  @@unique([agent_id, application_id], map: "unique_agent_app")
+  @@index([agent_id], map: "agent_apps_agent_id_index")
+  @@index([application_id], map: "agent_apps_application_id_index")
+}
+
+/// SAP HANA ODBC connection configuration
+model sap_destinations {
+  id                   BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  name                 String                  @db.VarChar(255)
+  description          String?                 @db.Text
+  dsn_name             String                  @db.VarChar(255)
+  username             String                  @db.VarChar(255)
+  password_encrypted   String                  @db.VarChar(500)
+  timeout_seconds      Int                     @default(30)
+  max_rows             Int                     @default(1000)
+  status               sap_destinations_status @default(active)
+  created_at           DateTime?               @db.Timestamp(0)
+  updated_at           DateTime?               @db.Timestamp(0)
+  host                 String                  @default("") @db.VarChar(255)
+  port                 Int                     @default(30015)
+  database_name        String?                 @db.VarChar(255) // For SAP HANA MDC (Multitenant) - tenant database name
+  pipelines            pipelines[]
+  sap_pipeline_configs sap_pipeline_configs[]
+
+  @@index([status], map: "sap_destinations_status_index")
+}
+
+/// SAP query configuration for pipelines
+model sap_pipeline_configs {
+  id                 BigInt                  @id @default(autoincrement()) @db.UnsignedBigInt
+  pipeline_id        BigInt                  @db.UnsignedBigInt
+  sap_destination_id BigInt                  @db.UnsignedBigInt
+  query_type         sap_pipeline_query_type @default(select)
+  sql_query          String                  @db.Text
+  param_mapping      Json?
+  created_at         DateTime?               @db.Timestamp(0)
+  updated_at         DateTime?               @db.Timestamp(0)
+  pipelines          pipelines               @relation(fields: [pipeline_id], references: [id], onDelete: Cascade)
+  sap_destinations   sap_destinations        @relation(fields: [sap_destination_id], references: [id], onDelete: Cascade)
+
+  @@index([pipeline_id], map: "sap_pipeline_configs_pipeline_id_index")
+  @@index([sap_destination_id], map: "sap_pipeline_configs_sap_destination_id_index")
+}
+
+/// Nexus Agents - Sender, Receiver, and Query agents
+model agents {
+  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  name         String        @db.VarChar(255)
+  token        String        @unique @db.VarChar(64)
+  description  String?       @db.Text
+  status       agents_status @default(active)
+  last_seen_at DateTime?     @db.Timestamp(0)
+  ip_address   String?       @db.VarChar(45)
+  created_at   DateTime?     @default(now()) @db.Timestamp(0)
+  updated_at   DateTime?     @db.Timestamp(0)
+  agent_type   String        @default("") @db.VarChar(50)
+  agent_apps   agent_apps[]
+
+  @@index([token], map: "agents_token_index")
+  @@index([agent_type], map: "agents_type_index")
+}
+
 enum mqtt_sources_status {
   connected
   disconnected
@@ -388,6 +463,7 @@ enum rest_destinations_method {
 enum pipelines_destination_type {
   database
   rest
+  sap
 }
 
 enum rest_destinations_auth_type {
@@ -424,42 +500,18 @@ enum audit_logs_event_type {
   DATA
 }
 
-// =====================
-// Agent Registration Models
-// =====================
-
-/// Nexus Agent - for auto-sync of app credentials
-model agents {
-  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
-  name         String        @db.VarChar(255)
-  token        String        @unique(map: "agents_token_unique") @db.VarChar(64)
-  description  String?       @db.Text
-  status       agents_status @default(active)
-  last_seen_at DateTime?     @db.Timestamp(0)
-  ip_address   String?       @db.VarChar(45)
-  created_at   DateTime?     @db.Timestamp(0)
-  updated_at   DateTime?     @db.Timestamp(0)
-  agent_apps   agent_apps[]
-
-  @@index([status], map: "agents_status_index")
-}
-
-/// Links agents to applications they can sync
-model agent_apps {
-  id             BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
-  agent_id       BigInt       @db.UnsignedBigInt
-  application_id BigInt       @db.UnsignedBigInt
-  created_at     DateTime?    @db.Timestamp(0)
-  agents         agents       @relation(fields: [agent_id], references: [id], onDelete: Cascade)
-  applications   applications @relation(fields: [application_id], references: [id], onDelete: Cascade)
-
-  @@unique([agent_id, application_id], map: "unique_agent_app")
-  @@index([agent_id], map: "agent_apps_agent_id_index")
-  @@index([application_id], map: "agent_apps_application_id_index")
-}
-
 enum agents_status {
   active
   inactive
   revoked
+}
+
+enum sap_destinations_status {
+  active
+  inactive
+}
+
+enum sap_pipeline_query_type {
+  select
+  insert
 }

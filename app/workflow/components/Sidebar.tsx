@@ -27,10 +27,12 @@ import {
   fetchDestinations,
   fetchRestDestinations,
   fetchMqttSources,
+  fetchSapDestinations,
   Application,
   Destination,
   RestDestination,
   MQTTSource,
+  SapDestination,
 } from '@/app/lib/api';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -75,6 +77,8 @@ function DraggableNode({ node }: { node: DraggableNodeItem }) {
         return 'bg-teal-100';
       case 'restDestination':
         return 'bg-orange-100';
+      case 'sapDestination':
+        return 'bg-rose-100';
       default:
         return 'bg-slate-100';
     }
@@ -112,10 +116,12 @@ export function Sidebar({ className }: SidebarProps) {
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
   const [mqttSources, setMqttSources] = useState<MQTTSource[]>([]);
+  const [sapDestinations, setSapDestinations] = useState<SapDestination[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [isLoadingDests, setIsLoadingDests] = useState(true);
   const [isLoadingRestDests, setIsLoadingRestDests] = useState(true);
   const [isLoadingMqtt, setIsLoadingMqtt] = useState(true);
+  const [isLoadingSap, setIsLoadingSap] = useState(true);
 
   const loadApplications = async () => {
     setIsLoadingApps(true);
@@ -165,11 +171,24 @@ export function Sidebar({ className }: SidebarProps) {
     }
   };
 
+  const loadSapDestinations = async () => {
+    setIsLoadingSap(true);
+    try {
+      const response = await fetchSapDestinations();
+      setSapDestinations(response.data || []);
+    } catch (error) {
+      console.error('Failed to load SAP destinations:', error);
+    } finally {
+      setIsLoadingSap(false);
+    }
+  };
+
   useEffect(() => {
     loadApplications();
     loadDestinations();
     loadRestDestinations();
     loadMqttSources();
+    loadSapDestinations();
   }, []);
 
   // Convert applications to draggable nodes
@@ -214,6 +233,17 @@ export function Sidebar({ className }: SidebarProps) {
     icon: 'globe',
     restDestinationId: dest.id,
     restDestination: dest,
+  }));
+
+  // Convert SAP destinations to draggable nodes
+  const sapDestinationNodes: DraggableNodeItem[] = sapDestinations.map((dest) => ({
+    type: 'sapDestination',
+    label: dest.name,
+    description: `ODBC - ${dest.dsn_name}`,
+    category: 'sapDestination',
+    icon: 'server',
+    sapDestinationId: dest.id,
+    sapDestination: dest,
   }));
 
   // Keep legacy nodes for triggers and logic
@@ -394,6 +424,45 @@ export function Sidebar({ className }: SidebarProps) {
             ) : (
               <p className="text-xs text-slate-500 text-center py-2">
                 No REST APIs configured
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* SAP Destinations */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-rose-500" />
+              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                SAP ODBC
+              </h3>
+            </div>
+            <button
+              onClick={loadSapDestinations}
+              disabled={isLoadingSap}
+              className="p-1 hover:bg-slate-700 rounded transition-colors"
+              title="Refresh SAP destinations"
+            >
+              {isLoadingSap ? (
+                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+              ) : (
+                <RefreshCw className="w-3 h-3 text-slate-500" />
+              )}
+            </button>
+          </div>
+          <div className="space-y-2">
+            {isLoadingSap ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+              </div>
+            ) : sapDestinationNodes.length > 0 ? (
+              sapDestinationNodes.map((node) => (
+                <DraggableNode key={`sap-${node.sapDestinationId}`} node={node} />
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 text-center py-2">
+                No SAP destinations configured
               </p>
             )}
           </div>

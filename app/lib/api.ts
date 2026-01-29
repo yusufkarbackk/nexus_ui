@@ -445,7 +445,7 @@ export interface FieldMappingPayload {
   destinationColumn: string;
 }
 
-export type DestinationType = 'database' | 'rest';
+export type DestinationType = 'database' | 'rest' | 'sap';
 
 export interface PipelinePayload {
   // Source configuration
@@ -459,6 +459,10 @@ export interface PipelinePayload {
   targetTable?: string;
   // For REST destinations
   restDestinationId?: number;
+  // For SAP destinations
+  sapDestinationId?: number;
+  sapQuery?: string;
+  sapQueryType?: string;
   isActive: boolean;
   fieldMappings: FieldMappingPayload[];
 }
@@ -510,6 +514,9 @@ export interface Pipeline {
   // For REST destinations
   restDestinationId?: number;
   restDestination?: RestDestination;
+  // For SAP destinations
+  sapDestinationId?: number;
+  sapDestination?: SapDestination;
   isActive: boolean;
   fieldMappings: FieldMapping[];
   application?: Application;
@@ -914,6 +921,7 @@ export interface Agent {
   name: string;
   token: string;
   description: string | null;
+  agentType: string;  // "", "sender", "receiver", "query"
   status: 'active' | 'inactive' | 'revoked';
   lastSeenAt: string | null;
   ipAddress: string | null;
@@ -940,6 +948,7 @@ export interface AgentListResponse {
 export interface CreateAgentPayload {
   name: string;
   description?: string;
+  agent_type?: string;  // "sender", "receiver", "query"
 }
 
 export interface UpdateAgentPayload {
@@ -1014,4 +1023,47 @@ export async function fetchAgentApps(agentId: number): Promise<{ success: boolea
   });
   return response.json();
 }
+
+// ============================================
+// SAP Destination API Functions
+// ============================================
+
+export type SapDestinationStatus = 'active' | 'inactive';
+
+export interface SapDestination {
+  id: number;
+  name: string;
+  description: string | null;
+  dsn_name: string;
+  username: string;
+  timeout_seconds: number;
+  max_rows: number;
+  status: SapDestinationStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SapDestinationListResponse {
+  success: boolean;
+  message: string;
+  data: SapDestination[];
+  total: number;
+}
+
+// Fetch all SAP destinations
+export async function fetchSapDestinations(): Promise<SapDestinationListResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/sap-destinations`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Fetch single SAP destination by ID
+export async function fetchSapDestinationById(id: number): Promise<ApiResponse<SapDestination>> {
+  const response = await authFetch(`${API_BASE_URL}/api/sap-destinations/${id}`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
 

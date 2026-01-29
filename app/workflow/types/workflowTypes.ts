@@ -1,7 +1,7 @@
 import { Node, Edge } from '@xyflow/react';
-import { Application, Destination, RestDestination } from '@/app/lib/api';
+import { Application, Destination, RestDestination, SapDestination } from '@/app/lib/api';
 
-export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination';
+export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination' | 'sapDestination';
 
 // Base custom node data
 export interface CustomNodeData {
@@ -43,6 +43,13 @@ export interface MQTTSourceNodeData extends CustomNodeData {
   mqttSource: MQTTSource;
 }
 
+// SAP Destination specific node data
+export interface SapDestinationNodeData extends CustomNodeData {
+  category: 'sapDestination';
+  sapDestinationId: number;
+  sapDestination: SapDestination;
+}
+
 // MQTT Source type
 export interface MQTTSource {
   id: number;
@@ -67,12 +74,16 @@ export interface PipelineConfig {
   sourceType: 'sender_app' | 'mqtt_source';
   applicationId?: number; // For sender app sources
   mqttSourceId?: number;  // For MQTT sources
-  destinationType: 'database' | 'rest';
+  destinationType: 'database' | 'rest' | 'sap';
   // For database destinations
   destinationId?: number;
   targetTable?: string;
   // For REST destinations
   restDestinationId?: number;
+  // For SAP destinations
+  sapDestinationId?: number;
+  sapQuery?: string;
+  sapQueryType?: string;
   fieldMappings: FieldMappingConfig[];
 }
 
@@ -110,7 +121,7 @@ export interface FieldMappingRequest {
   nullHandling?: string;
 }
 
-export type DestinationType = 'database' | 'rest';
+export type DestinationType = 'database' | 'rest' | 'sap';
 
 export interface PipelineRequest {
   sourceType: 'sender_app' | 'mqtt_source';
@@ -159,10 +170,11 @@ export interface Pipeline {
   applicationId: number;
   mqttSourceId?: number;
   // Destination info
-  destinationType?: 'database' | 'rest';
+  destinationType?: 'database' | 'rest' | 'sap';
   destinationId: number;
   targetTable: string;
   restDestinationId?: number;
+  sapDestinationId?: number;
   isActive: boolean;
   fieldMappings: FieldMapping[];
   // Expanded references
@@ -170,6 +182,7 @@ export interface Pipeline {
   mqttSource?: MQTTSource;
   destination?: Destination;
   restDestination?: RestDestination;
+  sapDestination?: SapDestination;
   createdAt: string;
   updatedAt: string;
 }
@@ -193,7 +206,9 @@ export type DestinationNodeType = Node<DestinationNodeData, 'destination'>;
 export type RestDestinationNodeType = Node<RestDestinationNodeData, 'restDestination'>;
 export type MQTTSourceNodeType = Node<MQTTSourceNodeData, 'mqttSource'>;
 
-export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType;
+export type SapDestinationNodeType = Node<SapDestinationNodeData, 'sapDestination'>;
+
+export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType | SapDestinationNodeType;
 export type WorkflowEdge = Edge<{ pipelineConfig?: PipelineConfig }>;
 
 export interface DraggableNodeItem {
@@ -213,6 +228,9 @@ export interface DraggableNodeItem {
   // For MQTT sources
   mqttSourceId?: number;
   mqttSource?: MQTTSource;
+  // For SAP destinations
+  sapDestinationId?: number;
+  sapDestination?: SapDestination;
 }
 
 export const nodeCategories: Record<NodeCategory, { color: string; bgColor: string; borderColor: string }> = {
@@ -250,6 +268,11 @@ export const nodeCategories: Record<NodeCategory, { color: string; bgColor: stri
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
     borderColor: 'border-orange-400',
+  },
+  sapDestination: {
+    color: 'text-rose-600',
+    bgColor: 'bg-rose-50',
+    borderColor: 'border-rose-400',
   },
 };
 

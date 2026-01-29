@@ -15,6 +15,7 @@ import {
     Plus,
     LogOut,
     User,
+    Server,
 } from 'lucide-react';
 
 export function Header() {
@@ -61,6 +62,13 @@ export function Header() {
                         >
                             <Globe className="w-4 h-4" />
                             REST APIs
+                        </Link>
+                        <Link
+                            href="/sap-destinations/list"
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                            <Server className="w-4 h-4" />
+                            SAP
                         </Link>
                         <Link
                             href="/workflow/list"
