@@ -82,8 +82,10 @@ export interface PipelineConfig {
   restDestinationId?: number;
   // For SAP destinations
   sapDestinationId?: number;
+  sapTargetSchema?: string;
   sapQuery?: string;
   sapQueryType?: string;
+  sapPrimaryKey?: string;  // Primary key column for UPDATE/DELETE WHERE clause
   fieldMappings: FieldMappingConfig[];
 }
 
@@ -162,6 +164,19 @@ export interface FieldMapping {
   createdAt: string;
 }
 
+// SAP Pipeline Config for persisting SAP query settings
+export interface SapPipelineConfig {
+  id?: number;
+  pipelineId?: number;
+  sapDestinationId?: number;
+  queryType: string;
+  sqlQuery: string;
+  targetSchema?: string;
+  targetTable?: string;
+  primaryKeyColumn?: string;
+  paramMapping?: string;
+}
+
 export interface Pipeline {
   id: number;
   workflowId: number;
@@ -183,6 +198,7 @@ export interface Pipeline {
   destination?: Destination;
   restDestination?: RestDestination;
   sapDestination?: SapDestination;
+  sapPipelineConfig?: SapPipelineConfig;
   createdAt: string;
   updatedAt: string;
 }
@@ -209,7 +225,7 @@ export type MQTTSourceNodeType = Node<MQTTSourceNodeData, 'mqttSource'>;
 export type SapDestinationNodeType = Node<SapDestinationNodeData, 'sapDestination'>;
 
 export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType | SapDestinationNodeType;
-export type WorkflowEdge = Edge<{ pipelineConfig?: PipelineConfig }>;
+export type WorkflowEdge = Edge<{ pipelineConfig?: PipelineConfig; edgeOffset?: number }>;
 
 export interface DraggableNodeItem {
   type: string;

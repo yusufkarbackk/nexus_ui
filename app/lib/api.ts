@@ -463,6 +463,8 @@ export interface PipelinePayload {
   sapDestinationId?: number;
   sapQuery?: string;
   sapQueryType?: string;
+  sapTargetSchema?: string;
+  sapPrimaryKey?: string;
   isActive: boolean;
   fieldMappings: FieldMappingPayload[];
 }
@@ -498,6 +500,19 @@ export interface FieldMapping {
   createdAt: string;
 }
 
+// SAP Pipeline Config from backend
+export interface SapPipelineConfig {
+  id: number;
+  pipelineId: number;
+  sapDestinationId: number;
+  queryType: string;
+  sqlQuery: string;
+  targetSchema?: string;
+  targetTable?: string;
+  primaryKeyColumn?: string;
+  paramMapping?: string;
+}
+
 export interface Pipeline {
   id: number;
   workflowId: number;
@@ -517,6 +532,7 @@ export interface Pipeline {
   // For SAP destinations
   sapDestinationId?: number;
   sapDestination?: SapDestination;
+  sapPipelineConfig?: SapPipelineConfig;
   isActive: boolean;
   fieldMappings: FieldMapping[];
   application?: Application;
@@ -1066,4 +1082,50 @@ export async function fetchSapDestinationById(id: number): Promise<ApiResponse<S
   return response.json();
 }
 
+// ============================================
+// SAP Metadata API Functions (for Edge Config)
+// ============================================
 
+export interface SapSchema {
+  name: string;
+}
+
+export interface SapTable {
+  name: string;
+  type: string;
+}
+
+export interface SapColumn {
+  name: string;
+  dataType: string;
+  length?: number;
+  scale?: number;
+  isNullable: boolean;
+  defaultValue?: string;
+}
+
+// Fetch schemas from SAP destination
+// NOTE: These use relative URLs because they are Next.js internal API routes,
+// NOT Nexus Core endpoints. The internal routes then call Nexus Core.
+export async function fetchSapSchemas(destinationId: number): Promise<{ success: boolean; schemas: SapSchema[]; error?: string }> {
+  const response = await authFetch(`/api/sap-destinations/${destinationId}/schemas`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Fetch tables for a schema from SAP destination
+export async function fetchSapTables(destinationId: number, schemaName: string): Promise<{ success: boolean; tables: SapTable[]; error?: string }> {
+  const response = await authFetch(`/api/sap-destinations/${destinationId}/tables?schema=${encodeURIComponent(schemaName)}`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Fetch columns for a table from SAP destination
+export async function fetchSapColumns(destinationId: number, schemaName: string, tableName: string): Promise<{ success: boolean; columns: SapColumn[]; error?: string }> {
+  const response = await authFetch(`/api/sap-destinations/${destinationId}/columns?schema=${encodeURIComponent(schemaName)}&table=${encodeURIComponent(tableName)}`, {
+    method: 'GET',
+  });
+  return response.json();
+}

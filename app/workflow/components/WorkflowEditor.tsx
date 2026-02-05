@@ -22,6 +22,8 @@ import '@xyflow/react/dist/style.css';
 import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode, SapDestinationNode } from './nodes';
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
+import { SapMappingPanel } from './SapMappingPanel';
+import { edgeTypes } from './edges/OffsetSmoothStepEdge';
 import {
   DraggableNodeItem,
   CustomNodeData,
@@ -35,7 +37,7 @@ import {
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
-import { createWorkflow, updateWorkflow, fetchWorkflowById, Application, Destination, Workflow, RestDestination } from '@/app/lib/api';
+import { createWorkflow, updateWorkflow, fetchWorkflowById, Application, Destination, Workflow, RestDestination, SapDestination } from '@/app/lib/api';
 import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,6 +104,27 @@ function FlowCanvas() {
     existingConfig: null,
   });
 
+  // SAP Mapping Panel state (separate from regular MappingPanel)
+  const [sapMappingPanel, setSapMappingPanel] = useState<{
+    isOpen: boolean;
+    sourceNodeId: string;
+    targetNodeId: string;
+    sourceApplication: Application | null;
+    mqttSource?: MQTTSource | null;
+    targetSapDestination: SapDestination | null;
+    pendingConnection: Connection | null;
+    existingConfig: PipelineConfig | null;
+  }>({
+    isOpen: false,
+    sourceNodeId: '',
+    targetNodeId: '',
+    sourceApplication: null,
+    mqttSource: null,
+    targetSapDestination: null,
+    pendingConnection: null,
+    existingConfig: null,
+  });
+
   // Load existing workflow when in edit mode
   useEffect(() => {
     async function loadWorkflow() {
@@ -129,8 +152,21 @@ function FlowCanvas() {
           const mqttNodeMap = new Map<number, string>(); // mqttSourceId -> nodeId
           const dbDestNodeMap = new Map<number, string>(); // destinationId -> nodeId (database)
           const restDestNodeMap = new Map<number, string>(); // restDestinationId -> nodeId (REST)
+          const sapDestNodeMap = new Map<number, string>(); // sapDestinationId -> nodeId (SAP)
+
+          // Track edge count per source-target pair for visual offset
+          const edgeCountMap = new Map<string, number>();
+
+          console.log('[DEBUG] Loading workflow with pipelines:', workflow.pipelines?.length, workflow.pipelines);
 
           workflow.pipelines?.forEach((pipeline, pipelineIndex) => {
+            console.log(`[DEBUG] Processing pipeline ${pipelineIndex}:`, {
+              id: pipeline.id,
+              sourceType: pipeline.sourceType,
+              destinationType: pipeline.destinationType,
+              sapDestinationId: pipeline.sapDestinationId,
+              sapPipelineConfig: pipeline.sapPipelineConfig,
+            });
             let sourceNodeId: string | undefined;
 
             // Check if this is an MQTT source or sender app (matches DB enum values)
@@ -205,8 +241,7 @@ function FlowCanvas() {
                 });
               }
             } else if (pipeline.destinationType === 'sap' && pipeline.sapDestination) {
-              // SAP destination
-              const sapDestNodeMap = new Map<number, string>();
+              // SAP destination - use sapDestNodeMap defined above to avoid duplicates
               targetNodeId = sapDestNodeMap.get(pipeline.sapDestinationId || 0);
               if (!targetNodeId) {
                 targetNodeId = `node-loaded-sap-${pipeline.sapDestinationId}`;
@@ -251,20 +286,62 @@ function FlowCanvas() {
 
             // Create edge and pipeline config
             if (sourceNodeId && targetNodeId) {
-              const edgeId = `edge-${sourceNodeId}-${targetNodeId}-${pipelineIndex}`;
               const isRest = pipeline.destinationType === 'rest';
+              const isSap = pipeline.destinationType === 'sap';
+
+              // Generate edgeId with same format as handleMappingSave to ensure consistency
+              // For SAP: include schema, table name, AND pipelineId to handle duplicates
+              // For others: just source-target (or with pipelineIndex as fallback)
+              let edgeId: string;
+              if (isSap && pipeline.sapPipelineConfig?.targetTable) {
+                const schema = pipeline.sapPipelineConfig.targetSchema || 'default';
+                // Include pipeline.id to ensure uniqueness even if duplicates exist
+                edgeId = `edge-${sourceNodeId}-${targetNodeId}-${schema}-${pipeline.sapPipelineConfig.targetTable}-${pipeline.id}`;
+              } else {
+                edgeId = `edge-${sourceNodeId}-${targetNodeId}-${pipelineIndex}`;
+              }
+
+              // Determine edge color and label based on destination type
+              let edgeColor = '#14b8a6'; // Default: teal for database
+              let edgeLabel = pipeline.targetTable || '';
+
+              if (isRest) {
+                edgeColor = '#f97316'; // Orange for REST
+                edgeLabel = pipeline.restDestination?.name || '';
+              } else if (isSap) {
+                edgeColor = '#ec4899'; // Pink/rose for SAP
+                // Use sapPipelineConfig from backend if available
+                edgeLabel = pipeline.sapPipelineConfig
+                  ? `${pipeline.sapPipelineConfig.targetSchema}.${pipeline.sapPipelineConfig.targetTable}`
+                  : pipeline.targetTable || '';
+              }
+
+              console.log(`[DEBUG] Creating edge:`, { edgeId, source: sourceNodeId, target: targetNodeId, label: edgeLabel, isSap, sapConfig: pipeline.sapPipelineConfig });
+
+              // Track edge count for same source-target pair to apply visual offset
+              const pairKey = `${sourceNodeId}-${targetNodeId}`;
+              const edgeIndex = edgeCountMap.get(pairKey) || 0;
+              edgeCountMap.set(pairKey, edgeIndex + 1);
+
+              // Calculate offset for multiple edges between same nodes
+              // edgeIndex 0 = 0, 1 = +50, 2 = -50, 3 = +100, 4 = -100, etc.
+              const edgeOffset = edgeIndex === 0 ? 0 : (Math.ceil(edgeIndex / 2) * 50 * (edgeIndex % 2 === 1 ? 1 : -1));
+
+              console.log(`[DEBUG] Edge offset for ${edgeId}: edgeIndex=${edgeIndex}, offset=${edgeOffset}`);
 
               newEdges.push({
                 id: edgeId,
                 source: sourceNodeId,
                 target: targetNodeId,
+                type: isSap && edgeIndex > 0 ? 'offsetSmoothStep' : 'smoothstep', // Use custom edge for multi-SAP
                 animated: true,
-                style: { stroke: isRest ? '#f97316' : '#14b8a6', strokeWidth: 2 },
-                label: isRest ? pipeline.restDestination?.name : pipeline.targetTable,
-                labelStyle: { fill: isRest ? '#f97316' : '#14b8a6', fontSize: 10 },
+                style: { stroke: edgeColor, strokeWidth: 2, strokeDasharray: isSap ? '5,5' : undefined },
+                label: edgeLabel,
+                labelStyle: { fill: edgeColor, fontSize: 10 },
                 labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
                 labelBgPadding: [4, 2] as [number, number],
                 labelBgBorderRadius: 4,
+                data: { edgeOffset }, // Pass offset for custom edge rendering
               });
 
               const config: PipelineConfig = {
@@ -274,8 +351,17 @@ function FlowCanvas() {
                 applicationId: pipeline.applicationId,
                 destinationType: pipeline.destinationType || 'database',
                 destinationId: pipeline.destinationId,
-                targetTable: pipeline.targetTable,
+                // For SAP, targetTable comes from sapPipelineConfig
+                targetTable: isSap
+                  ? pipeline.sapPipelineConfig?.targetTable
+                  : pipeline.targetTable,
                 restDestinationId: pipeline.restDestinationId,
+                // SAP-specific config
+                sapDestinationId: pipeline.sapDestinationId,
+                sapTargetSchema: pipeline.sapPipelineConfig?.targetSchema,
+                sapQuery: pipeline.sapPipelineConfig?.sqlQuery,
+                sapQueryType: pipeline.sapPipelineConfig?.queryType,
+                sapPrimaryKey: pipeline.sapPipelineConfig?.primaryKeyColumn,
                 fieldMappings: pipeline.fieldMappings?.map(fm => ({
                   sourceField: fm.sourceField,
                   destinationColumn: fm.destinationColumn,
@@ -463,49 +549,19 @@ function FlowCanvas() {
         targetNode?.type === 'sapDestination'
       ) {
         // Sender App or MQTT -> SAP destination connection
+        // Open SAP Mapping Panel for configuration
         const sourceData = sourceNode.data as SenderAppNodeData | MQTTSourceNodeData;
         const targetData = targetNode.data as SapDestinationNodeData;
 
-        const edgeId = `edge-${connection.source}-${connection.target}`;
-
-        // Create the pipeline config for SAP destination
-        const config: PipelineConfig = {
+        setSapMappingPanel({
+          isOpen: true,
           sourceNodeId: connection.source!,
           targetNodeId: connection.target!,
-          sourceType: sourceNode.type === 'mqttSource' ? 'mqtt_source' : 'sender_app',
-          ...(sourceNode.type === 'mqttSource'
-            ? { mqttSourceId: (sourceData as MQTTSourceNodeData).mqttSource.id }
-            : { applicationId: (sourceData as SenderAppNodeData).application.id }
-          ),
-          destinationType: 'sap',
-          sapDestinationId: targetData.sapDestinationId,
-          fieldMappings: [], // SAP uses query params, not field mappings
-        };
-
-        // Add the edge with SAP styling (rose color)
-        setEdges((eds) =>
-          addEdge(
-            {
-              ...connection,
-              id: edgeId,
-              animated: true,
-              style: { stroke: '#f43f5e', strokeWidth: 2 },
-              label: targetData.sapDestination?.name || 'SAP Query',
-              labelStyle: { fill: '#f43f5e', fontSize: 10 },
-              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
-              labelBgPadding: [4, 2] as [number, number],
-              labelBgBorderRadius: 4,
-              data: { pipelineConfig: config },
-            },
-            eds
-          )
-        );
-
-        // Store the pipeline config
-        setPipelineConfigs((prev) => {
-          const newMap = new Map(prev);
-          newMap.set(edgeId, config);
-          return newMap;
+          sourceApplication: sourceNode.type === 'senderApp' ? (sourceData as SenderAppNodeData).application : null,
+          mqttSource: sourceNode.type === 'mqttSource' ? (sourceData as MQTTSourceNodeData).mqttSource : null,
+          targetSapDestination: targetData.sapDestination,
+          pendingConnection: connection,
+          existingConfig: null,
         });
       } else {
         // For other connections, just add the edge
@@ -527,37 +583,67 @@ function FlowCanvas() {
   // Handle mapping panel save
   const handleMappingSave = useCallback(
     (config: PipelineConfig) => {
-      const edgeId = `edge-${config.sourceNodeId}-${config.targetNodeId}`;
-      const isRest = config.destinationType === 'rest';
-      const edgeLabel = isRest
-        ? (nodes.find(n => n.id === config.targetNodeId)?.data?.label || 'REST API')
-        : config.targetTable;
-      const edgeColor = isRest ? '#f97316' : '#14b8a6';
+      // For SAP destinations, include table name in edge ID to allow multiple tables per destination
+      const edgeId = config.destinationType === 'sap' && config.targetTable
+        ? `edge-${config.sourceNodeId}-${config.targetNodeId}-${config.sapTargetSchema || 'default'}-${config.targetTable}`
+        : `edge-${config.sourceNodeId}-${config.targetNodeId}`;
 
-      if (mappingPanel.pendingConnection) {
-        // Creating new connection - Add the edge
-        setEdges((eds) =>
-          addEdge(
-            {
-              ...mappingPanel.pendingConnection!,
-              id: edgeId,
-              animated: true,
-              style: { stroke: edgeColor, strokeWidth: 2 },
-              label: edgeLabel,
-              labelStyle: { fill: edgeColor, fontSize: 10 },
-              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
-              labelBgPadding: [4, 2] as [number, number],
-              labelBgBorderRadius: 4,
-              data: { pipelineConfig: config },
-            },
-            eds
-          )
-        );
+      // Determine edge label and color based on destination type
+      let edgeLabel: string | undefined;
+      let edgeColor: string;
+
+      switch (config.destinationType) {
+        case 'rest':
+          edgeLabel = nodes.find(n => n.id === config.targetNodeId)?.data?.label || 'REST API';
+          edgeColor = '#f97316'; // Orange
+          break;
+        case 'sap':
+          edgeLabel = config.targetTable
+            ? `${config.sapTargetSchema}.${config.targetTable}`
+            : nodes.find(n => n.id === config.targetNodeId)?.data?.label || 'SAP Query';
+          edgeColor = '#f43f5e'; // Rose
+          break;
+        case 'database':
+        default:
+          edgeLabel = config.targetTable;
+          edgeColor = '#14b8a6'; // Teal
+          break;
+      }
+
+      // Use pendingConnection from either regular or SAP mapping panel
+      const pendingConnection = mappingPanel.pendingConnection || sapMappingPanel.pendingConnection;
+
+      if (pendingConnection) {
+        // Count existing edges between same source-target for offset
+        const existingEdgeCount = edges.filter(
+          e => e.source === config.sourceNodeId && e.target === config.targetNodeId
+        ).length;
+
+        // Calculate offset: 0 = 0, 1 = +50, 2 = -50, 3 = +100, etc.
+        const sapEdgeOffset = existingEdgeCount === 0 ? 0 : (Math.ceil(existingEdgeCount / 2) * 50 * (existingEdgeCount % 2 === 1 ? 1 : -1));
+
+        // Creating new connection - Use custom edge type for SAP with offset
+        const isSapWithOffset = config.destinationType === 'sap' && existingEdgeCount > 0;
+
+        const newEdge = {
+          ...pendingConnection,
+          id: edgeId,
+          type: isSapWithOffset ? 'offsetSmoothStep' : 'smoothstep',
+          animated: true,
+          style: { stroke: edgeColor, strokeWidth: 2 },
+          label: edgeLabel,
+          labelStyle: { fill: edgeColor, fontSize: 10 },
+          labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+          labelBgPadding: [4, 2] as [number, number],
+          labelBgBorderRadius: 4,
+          data: { pipelineConfig: config, edgeOffset: sapEdgeOffset },
+        };
+        setEdges((eds) => [...eds, newEdge]);
       } else {
-        // Editing existing connection - Update edge label
+        // Editing existing connection - Update edge by its ID (not just source/target)
         setEdges((eds) =>
           eds.map((edge) => {
-            if (edge.source === config.sourceNodeId && edge.target === config.targetNodeId) {
+            if (edge.id === edgeId) {
               return {
                 ...edge,
                 label: edgeLabel,
@@ -575,10 +661,23 @@ function FlowCanvas() {
       setPipelineConfigs((prev) => {
         const newMap = new Map(prev);
         // Find and remove old config with same source/target if exists
+        // For SAP destinations, also compare targetTable to allow multiple tables per destination
         for (const [key, value] of newMap.entries()) {
-          if (value.sourceNodeId === config.sourceNodeId && value.targetNodeId === config.targetNodeId) {
-            newMap.delete(key);
-            break;
+          const sameSourceTarget = value.sourceNodeId === config.sourceNodeId && value.targetNodeId === config.targetNodeId;
+          const isSap = config.destinationType === 'sap';
+
+          if (sameSourceTarget) {
+            // For SAP, only remove if same table (updating existing mapping)
+            // For other types, remove any duplicate source/target pair
+            if (isSap) {
+              if (value.targetTable === config.targetTable && value.sapTargetSchema === config.sapTargetSchema) {
+                newMap.delete(key);
+                break;
+              }
+            } else {
+              newMap.delete(key);
+              break;
+            }
           }
         }
         newMap.set(edgeId, config);
@@ -597,7 +696,7 @@ function FlowCanvas() {
         existingConfig: null,
       });
     },
-    [mappingPanel.pendingConnection, setEdges, nodes]
+    [mappingPanel.pendingConnection, sapMappingPanel.pendingConnection, setEdges, nodes]
   );
 
   // Handle mapping panel close
@@ -638,14 +737,15 @@ function FlowCanvas() {
       }
 
       // Handle both senderApp and mqttSource as source nodes
-      // Handle both destination and restDestination as target nodes
+      // Handle destination, restDestination, and sapDestination as target nodes
       const isSenderApp = sourceNode.type === 'senderApp';
       const isMqttSource = sourceNode.type === 'mqttSource';
       const isDbDest = targetNode.type === 'destination';
       const isRestDest = targetNode.type === 'restDestination';
+      const isSapDest = targetNode.type === 'sapDestination';
 
       if ((isSenderApp || isMqttSource) && (isDbDest || isRestDest)) {
-        // Build mapping panel state based on target type
+        // Build mapping panel state based on target type (Database or REST)
         const panelState: MappingPanelState = {
           isOpen: true,
           sourceNodeId: edge.source,
@@ -660,6 +760,19 @@ function FlowCanvas() {
         };
 
         setMappingPanel(panelState);
+      } else if ((isSenderApp || isMqttSource) && isSapDest) {
+        // Open SAP Mapping Panel for SAP destination
+        const targetData = targetNode.data as SapDestinationNodeData;
+        setSapMappingPanel({
+          isOpen: true,
+          sourceNodeId: edge.source,
+          targetNodeId: edge.target,
+          sourceApplication: isSenderApp ? (sourceNode.data as SenderAppNodeData).application : null,
+          mqttSource: isMqttSource ? (sourceNode.data as MQTTSourceNodeData).mqttSource : null,
+          targetSapDestination: targetData.sapDestination,
+          pendingConnection: null, // null because we're editing, not creating
+          existingConfig: existingConfig,
+        });
       }
     },
     [nodes, pipelineConfigs]
@@ -795,7 +908,31 @@ function FlowCanvas() {
 
   const handleSave = async () => {
     // Collect all pipeline configurations
-    const pipelines = Array.from(pipelineConfigs.values()).map((config) => ({
+    const allConfigs = Array.from(pipelineConfigs.values());
+
+    // Debug: log all configs before save
+    console.log('[DEBUG] Pipeline configs before save:', allConfigs.length, allConfigs);
+
+    // Deduplicate SAP pipelines based on source+destination+schema+table
+    // This prevents duplicate pipelines when workflow is loaded and saved without changes
+    const uniqueConfigs = new Map<string, typeof allConfigs[0]>();
+    for (const config of allConfigs) {
+      let uniqueKey: string;
+      if (config.destinationType === 'sap') {
+        // For SAP: unique by source + destination + schema + table
+        uniqueKey = `sap-${config.sourceNodeId}-${config.targetNodeId}-${config.sapTargetSchema || 'default'}-${config.targetTable || 'none'}`;
+      } else if (config.destinationType === 'rest') {
+        uniqueKey = `rest-${config.sourceNodeId}-${config.targetNodeId}-${config.restDestinationId}`;
+      } else {
+        // For database: unique by source + destination + table
+        uniqueKey = `db-${config.sourceNodeId}-${config.targetNodeId}-${config.targetTable || 'none'}`;
+      }
+      uniqueConfigs.set(uniqueKey, config);
+    }
+
+    console.log('[DEBUG] Unique configs after dedup:', uniqueConfigs.size, Array.from(uniqueConfigs.values()));
+
+    const pipelines = Array.from(uniqueConfigs.values()).map((config) => ({
       sourceType: config.sourceType || 'sender_app',
       // Source fields - either applicationId or mqttSourceId based on sourceType
       ...(config.sourceType === 'mqtt_source'
@@ -817,6 +954,9 @@ function FlowCanvas() {
         sapDestinationId: config.sapDestinationId,
         sapQuery: config.sapQuery,
         sapQueryType: config.sapQueryType,
+        sapTargetSchema: config.sapTargetSchema,
+        sapPrimaryKey: config.sapPrimaryKey,
+        targetTable: config.targetTable,
       }),
       isActive: true,
       fieldMappings: config.fieldMappings.map((fm) => ({
@@ -932,6 +1072,7 @@ function FlowCanvas() {
           onDragOver={onDragOver}
           onDrop={onDrop}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           className="bg-slate-950"
           defaultEdgeOptions={{
@@ -1137,7 +1278,7 @@ function FlowCanvas() {
         </ReactFlow>
       </div>
 
-      {/* Mapping Panel */}
+      {/* Mapping Panel (Database & REST) */}
       {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && (mappingPanel.targetDestination || mappingPanel.targetRestDestination) && (
         <MappingPanel
           isOpen={mappingPanel.isOpen}
@@ -1151,6 +1292,25 @@ function FlowCanvas() {
           sourceNodeId={mappingPanel.sourceNodeId}
           targetNodeId={mappingPanel.targetNodeId}
           existingConfig={mappingPanel.existingConfig || undefined}
+        />
+      )}
+
+      {/* SAP Mapping Panel */}
+      {(sapMappingPanel.sourceApplication || sapMappingPanel.mqttSource) && sapMappingPanel.targetSapDestination && (
+        <SapMappingPanel
+          key={`sap-panel-${sapMappingPanel.sourceNodeId}-${sapMappingPanel.targetNodeId}-${sapMappingPanel.existingConfig?.targetTable || 'new'}-${sapMappingPanel.existingConfig?.sapTargetSchema || 'default'}`}
+          isOpen={sapMappingPanel.isOpen}
+          onClose={() => setSapMappingPanel({ ...sapMappingPanel, isOpen: false })}
+          onSave={(config) => {
+            handleMappingSave(config);
+            setSapMappingPanel({ ...sapMappingPanel, isOpen: false });
+          }}
+          sourceApplication={sapMappingPanel.sourceApplication || undefined}
+          mqttSource={sapMappingPanel.mqttSource || undefined}
+          targetSapDestination={sapMappingPanel.targetSapDestination}
+          sourceNodeId={sapMappingPanel.sourceNodeId}
+          targetNodeId={sapMappingPanel.targetNodeId}
+          existingConfig={sapMappingPanel.existingConfig || undefined}
         />
       )}
     </div>
