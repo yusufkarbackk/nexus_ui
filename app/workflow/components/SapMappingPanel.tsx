@@ -48,7 +48,7 @@ interface SapMappingPanelProps {
     existingConfig?: PipelineConfig;
 }
 
-type SapQueryType = 'insert' | 'update' | 'delete';
+type SapQueryType = 'insert' | 'upsert' | 'update' | 'delete';
 
 // Transform types available
 const TRANSFORM_TYPES = [
@@ -286,6 +286,8 @@ export function SapMappingPanel({
             case 'delete':
                 const deleteWhereClause = primaryKeyColumn ? `"${primaryKeyColumn}" = ?` : '<select primary key>';
                 return `DELETE FROM ${quotedSchema}.${quotedTable}\n  WHERE ${deleteWhereClause}`;
+            case 'upsert':
+                return `UPSERT ${quotedSchema}.${quotedTable}\n  (${quotedColumns})\n  VALUES (${placeholders})\n  WITH PRIMARY KEY`;
             default:
                 return '';
         }
@@ -305,9 +307,9 @@ export function SapMappingPanel({
             setError('Please add at least one field mapping');
             return;
         }
-        // Validate primary key is selected for UPDATE/DELETE
-        if ((queryType === 'update' || queryType === 'delete') && !primaryKeyColumn) {
-            setError('Please select a primary key column for UPDATE/DELETE operations');
+        // Validate primary key is selected for UPDATE/DELETE/UPSERT
+        if ((queryType === 'update' || queryType === 'delete' || queryType === 'upsert') && !primaryKeyColumn) {
+            setError('Please select a primary key column for UPDATE/DELETE/UPSERT operations');
             return;
         }
 
@@ -449,6 +451,7 @@ export function SapMappingPanel({
                                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none text-slate-900 bg-white text-sm"
                             >
                                 <option value="insert">INSERT</option>
+                                <option value="upsert">UPSERT</option>
                                 <option value="update">UPDATE</option>
                                 <option value="delete">DELETE</option>
                             </select>
@@ -456,7 +459,7 @@ export function SapMappingPanel({
                     </div>
 
                     {/* Primary Key Selection - Only for UPDATE/DELETE */}
-                    {(queryType === 'update' || queryType === 'delete') && columns.length > 0 && (
+                    {(queryType === 'update' || queryType === 'delete' || queryType === 'upsert') && columns.length > 0 && (
                         <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                             <label className="flex items-center gap-2 text-sm font-semibold text-amber-800 mb-2">
                                 <Key className="w-4 h-4" />

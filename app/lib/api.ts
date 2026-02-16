@@ -457,6 +457,8 @@ export interface PipelinePayload {
   // For database destinations
   destinationId?: number;
   targetTable?: string;
+  dbQueryType?: 'select' | 'insert' | 'upsert' | 'update' | 'delete';  // Database operation type
+  dbPrimaryKey?: string;  // Primary key for UPDATE/DELETE/UPSERT
   // For REST destinations
   restDestinationId?: number;
   // For SAP destinations
@@ -525,6 +527,8 @@ export interface Pipeline {
   // For database destinations
   destinationId?: number;
   targetTable?: string;
+  dbQueryType?: string;  // Database operation type: select, insert, upsert, update, delete
+  dbPrimaryKey?: string;  // Primary key for UPDATE/DELETE/UPSERT operations
   destination?: Destination;
   // For REST destinations
   restDestinationId?: number;

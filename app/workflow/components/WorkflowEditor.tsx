@@ -355,6 +355,9 @@ function FlowCanvas() {
                 targetTable: isSap
                   ? pipeline.sapPipelineConfig?.targetTable
                   : pipeline.targetTable,
+                // Database query config
+                dbQueryType: pipeline.dbQueryType as PipelineConfig['dbQueryType'],
+                dbPrimaryKey: pipeline.dbPrimaryKey,
                 restDestinationId: pipeline.restDestinationId,
                 // SAP-specific config
                 sapDestinationId: pipeline.sapDestinationId,
@@ -944,6 +947,8 @@ function FlowCanvas() {
       ...(config.destinationType === 'database' && {
         destinationId: config.destinationId,
         targetTable: config.targetTable,
+        dbQueryType: config.dbQueryType,
+        dbPrimaryKey: config.dbPrimaryKey,
       }),
       // REST destination fields
       ...(config.destinationType === 'rest' && {

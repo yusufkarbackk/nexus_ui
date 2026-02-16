@@ -78,6 +78,8 @@ export interface PipelineConfig {
   // For database destinations
   destinationId?: number;
   targetTable?: string;
+  dbQueryType?: 'select' | 'insert' | 'upsert' | 'update' | 'delete';  // Database CRUD operation type
+  dbPrimaryKey?: string;  // Primary key column for UPDATE/DELETE WHERE clause
   // For REST destinations
   restDestinationId?: number;
   // For SAP destinations
@@ -88,6 +90,7 @@ export interface PipelineConfig {
   sapPrimaryKey?: string;  // Primary key column for UPDATE/DELETE WHERE clause
   fieldMappings: FieldMappingConfig[];
 }
+
 
 export interface FieldMappingConfig {
   sourceField: string;
