@@ -1,7 +1,8 @@
 import { Node, Edge } from '@xyflow/react';
-import { Application, Destination, RestDestination, SapDestination } from '@/app/lib/api';
+import { Application, Destination, RestDestination, SapDestination, WorkflowStep, WorkflowStepPayload } from '@/app/lib/api';
+export type { WorkflowType, StepType, StepErrorHandling, WorkflowStep, WorkflowStepPayload, StepFieldMapping, StepFieldMappingPayload } from '@/app/lib/api';
 
-export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination' | 'sapDestination';
+export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination' | 'sapDestination' | 'sequentialStep';
 
 // Base custom node data
 export interface CustomNodeData {
@@ -144,14 +145,18 @@ export interface CreateWorkflowRequest {
   name: string;
   description?: string;
   isActive: boolean;
-  pipelines: PipelineRequest[];
+  workflowType?: 'fan_out' | 'sequential';
+  pipelines?: PipelineRequest[];           // For fan_out workflows
+  steps?: WorkflowStepPayload[];           // For sequential workflows
 }
 
 export interface UpdateWorkflowRequest {
   name?: string;
   description?: string;
   isActive?: boolean;
-  pipelines?: PipelineRequest[];
+  workflowType?: 'fan_out' | 'sequential';
+  pipelines?: PipelineRequest[];           // For fan_out workflows
+  steps?: WorkflowStepPayload[];           // For sequential workflows
 }
 
 export interface FieldMapping {
@@ -211,7 +216,9 @@ export interface Workflow {
   name: string;
   description?: string;
   isActive: boolean;
+  workflowType?: 'fan_out' | 'sequential';
   pipelines: Pipeline[];
+  steps?: WorkflowStep[];
   createdAt: string;
   updatedAt: string;
 }
@@ -292,6 +299,11 @@ export const nodeCategories: Record<NodeCategory, { color: string; bgColor: stri
     color: 'text-rose-600',
     bgColor: 'bg-rose-50',
     borderColor: 'border-rose-400',
+  },
+  sequentialStep: {
+    color: 'text-cyan-600',
+    bgColor: 'bg-cyan-50',
+    borderColor: 'border-cyan-400',
   },
 };
 

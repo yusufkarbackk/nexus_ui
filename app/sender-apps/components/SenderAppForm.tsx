@@ -14,10 +14,6 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
-  Shield,
-  Key,
-  Eye,
-  EyeOff,
 } from 'lucide-react';
 import Link from 'next/link';
 import { DataField } from '../types/senderAppTypes';
@@ -40,10 +36,6 @@ export function SenderAppForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const encryptionEnabled = true; // Encryption is always mandatory
-  const [masterSecret, setMasterSecret] = useState<string | null>(null);
-  const [showSecret, setShowSecret] = useState(false);
-  const [secretCopied, setSecretCopied] = useState(false);
 
   // Load existing application data when in edit mode
   useEffect(() => {
@@ -155,21 +147,15 @@ export function SenderAppForm() {
           name: appName,
           description: appDescription || undefined,
           appKey: appId,
-          encryptionEnabled: encryptionEnabled,
+          encryptionEnabled: true,
           fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
         });
 
         if (response.success) {
-          // If encryption was enabled, show the master secret
-          if (encryptionEnabled && response.data?.masterSecret) {
-            setMasterSecret(response.data.masterSecret);
-            setSuccess('Sender App created! IMPORTANT: Copy your Master Secret below - it will only be shown once!');
-          } else {
-            setSuccess('Sender App created successfully!');
-            setTimeout(() => {
-              router.push('/sender-apps/list');
-            }, 1500);
-          }
+          setSuccess('Sender App created successfully!');
+          setTimeout(() => {
+            router.push('/sender-apps/list');
+          }, 1500);
         } else {
           setError(response.message || 'Failed to create application');
         }
@@ -340,84 +326,6 @@ export function SenderAppForm() {
                 </div>
               </div>
             </section>
-
-            {/* Encryption Section */}
-            {!isEditMode && (
-              <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-amber-500/20 rounded-lg">
-                    <Shield className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-lg font-semibold text-white">End-to-End Encryption</h2>
-                        <p className="text-sm text-slate-400 mt-1">
-                          Encrypt data with daily rotating keys (Enigma-style)
-                        </p>
-                      </div>
-                      <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 text-sm font-medium rounded-full border border-emerald-500/30">
-                        Always Enabled
-                      </span>
-                    </div>
-
-                    <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                      <p className="text-amber-400 text-sm">
-                        <strong>⚠️ Important:</strong> After creating, you will receive a Master Secret.
-                        Copy it immediately - it will only be shown once! You&apos;ll need it to encrypt data using our SDK.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* Master Secret Display (after creation) */}
-            {masterSecret && (
-              <section className="bg-slate-900 rounded-xl border-2 border-amber-500 p-6">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-amber-500/20 rounded-lg">
-                    <Key className="w-5 h-5 text-amber-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h2 className="text-lg font-semibold text-white mb-2">🔐 Your Master Secret</h2>
-                    <p className="text-sm text-amber-400 mb-4">
-                      Copy this now! It will NOT be shown again.
-                    </p>
-                    <div className="flex items-center gap-2 bg-slate-800 rounded-lg border border-slate-700 p-3">
-                      <code className="flex-1 text-emerald-400 font-mono text-sm break-all">
-                        {showSecret ? masterSecret : '•'.repeat(40)}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => setShowSecret(!showSecret)}
-                        className="p-2 text-slate-400 hover:text-white transition-colors"
-                      >
-                        {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          await navigator.clipboard.writeText(masterSecret);
-                          setSecretCopied(true);
-                          setTimeout(() => setSecretCopied(false), 2000);
-                        }}
-                        className="p-2 text-slate-400 hover:text-white transition-colors"
-                      >
-                        {secretCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => router.push('/sender-apps/list')}
-                      className="mt-4 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors"
-                    >
-                      I&apos;ve copied it, continue →
-                    </button>
-                  </div>
-                </div>
-              </section>
-            )}
 
             {/* Data Fields Section */}
             <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">

@@ -446,6 +446,108 @@ export interface FieldMappingPayload {
 }
 
 export type DestinationType = 'database' | 'rest' | 'sap';
+export type WorkflowType = 'fan_out' | 'sequential';
+export type StepType = 'rest_call' | 'db_query' | 'transform' | 'condition' | 'delay';
+export type StepErrorHandling = 'stop' | 'skip' | 'retry';
+
+// Sequential workflow step field mapping
+export interface StepFieldMappingPayload {
+  sourceField: string;
+  destinationColumn: string;
+  dataType?: string;
+  transformType?: string;
+  transformParam?: string;
+  defaultValue?: string;
+  nullHandling?: string;
+}
+
+export interface StepFieldMapping {
+  id: number;
+  stepId: number;
+  sourceField: string;
+  destinationColumn: string;
+  dataType?: string;
+  transformType?: string;
+  transformParam?: string;
+  defaultValue?: string;
+  nullHandling?: string;
+  createdAt: string;
+}
+
+// Sequential workflow step payload (for create/update)
+export interface WorkflowStepPayload {
+  stepOrder: number;
+  stepName: string;
+  stepType: StepType;
+  // REST call config
+  restDestinationId?: number;
+  restMethod?: string;
+  restPath?: string;
+  restBodyTemplate?: string;
+  // DB query config
+  databaseConfigId?: number;
+  dbQueryType?: string;
+  dbTargetTable?: string;
+  dbPrimaryKey?: string;
+  dbExtendedQuery?: string;
+  // Transform config
+  transformExpression?: string;
+  // Condition config
+  conditionExpression?: string;
+  onTrueStep?: number;
+  onFalseStep?: number;
+  // Delay config
+  delaySeconds?: number;
+  // Common config
+  inputMapping?: string;
+  outputVariable?: string;
+  onError: StepErrorHandling;
+  maxRetries: number;
+  timeoutSeconds: number;
+  isActive: boolean;
+  fieldMappings: StepFieldMappingPayload[];
+}
+
+// Sequential workflow step (from API response)
+export interface WorkflowStep {
+  id: number;
+  workflowId: number;
+  stepOrder: number;
+  stepName: string;
+  stepType: StepType;
+  // REST call config
+  restDestinationId?: number;
+  restMethod?: string;
+  restPath?: string;
+  restBodyTemplate?: string;
+  // DB query config
+  databaseConfigId?: number;
+  dbQueryType?: string;
+  dbTargetTable?: string;
+  dbPrimaryKey?: string;
+  dbExtendedQuery?: string;
+  // Transform config
+  transformExpression?: string;
+  // Condition config
+  conditionExpression?: string;
+  onTrueStep?: number;
+  onFalseStep?: number;
+  // Delay config
+  delaySeconds?: number;
+  // Common config
+  inputMapping?: string;
+  outputVariable?: string;
+  onError: StepErrorHandling;
+  maxRetries: number;
+  timeoutSeconds: number;
+  isActive: boolean;
+  fieldMappings: StepFieldMapping[];
+  // Expanded references
+  restDestination?: RestDestination;
+  destination?: Destination;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface PipelinePayload {
   // Source configuration
@@ -477,7 +579,9 @@ export interface CreateWorkflowPayload {
   isActive: boolean;
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
-  pipelines: PipelinePayload[];
+  workflowType?: WorkflowType;
+  pipelines?: PipelinePayload[];       // For fan_out workflows
+  steps?: WorkflowStepPayload[];       // For sequential workflows
 }
 
 export interface UpdateWorkflowPayload {
@@ -486,7 +590,9 @@ export interface UpdateWorkflowPayload {
   isActive?: boolean;
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
-  pipelines?: PipelinePayload[];
+  workflowType?: WorkflowType;
+  pipelines?: PipelinePayload[];       // For fan_out workflows
+  steps?: WorkflowStepPayload[];       // For sequential workflows
 }
 
 export interface FieldMapping {
@@ -552,7 +658,9 @@ export interface Workflow {
   isActive: boolean;
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
+  workflowType?: WorkflowType;
   pipelines: Pipeline[];
+  steps?: WorkflowStep[];
   createdAt: string;
   updatedAt: string;
 }
@@ -647,6 +755,32 @@ export async function deleteWorkflow(id: number): Promise<ApiResponse<null>> {
 
   if (!response.ok) {
     throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return data;
+}
+
+// Execute / trigger workflow manually
+export async function executeWorkflow(id: number, payload?: Record<string, unknown>): Promise<{
+  message: string;
+  message_id: string;
+  workflow_id: number;
+  workflow_name: string;
+  workflow_type: string;
+  stream: string;
+}> {
+  const response = await authFetch(`${API_BASE_URL}/api/workflows/${id}/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ payload: payload || {} }),
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(data.error || data.message || `HTTP error! status: ${response.status}`);
   }
 
   return data;

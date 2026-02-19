@@ -71,6 +71,7 @@ model database_configs {
   description     String?                          @db.VarChar(255)
   database_tables database_tables[]
   pipelines       pipelines[]
+  workflow_steps  workflow_steps[]
 }
 
 model database_field_subscriptions {
@@ -228,6 +229,7 @@ model rest_destinations {
   updated_at      DateTime?                   @db.Timestamp(0)
   body_fields     Json?
   pipelines       pipelines[]
+  workflow_steps  workflow_steps[]
 
   @@index([auth_type], map: "idx_auth_type")
   @@index([status], map: "idx_status")
@@ -269,9 +271,12 @@ model workflows {
   updated_at                DateTime?            @db.Timestamp(0)
   redis_retention_hours     Float                @default(168)
   delete_failed_immediately Boolean              @default(false)
+  workflow_type             workflows_type       @default(fan_out)
+  webhook_token             String?              @unique @db.VarChar(64)
   logs                      logs[]
   mqtt_subscriptions        mqtt_subscriptions[]
   pipelines                 pipelines[]
+  workflow_steps            workflow_steps[]
 }
 
 /// MQTT broker connection configuration
@@ -530,4 +535,101 @@ enum sap_pipeline_query_type {
   upsert
   update
   delete
+}
+
+enum workflows_type {
+  fan_out
+  sequential
+}
+
+enum workflow_steps_step_type {
+  rest_call
+  db_query
+  transform
+  condition
+  delay
+}
+
+enum workflow_steps_on_error {
+  stop
+  skip
+  retry
+}
+
+enum workflow_steps_db_query_type {
+  select
+  insert
+  update
+  delete
+  upsert
+}
+
+/// Steps for sequential workflow execution
+model workflow_steps {
+  id          BigInt                   @id @default(autoincrement()) @db.UnsignedBigInt
+  workflow_id BigInt                   @db.UnsignedBigInt
+  step_order  Int
+  step_name   String                   @db.VarChar(255)
+  step_type   workflow_steps_step_type
+
+  // REST call config
+  rest_destination_id BigInt? @db.UnsignedBigInt
+  rest_method         String? @db.VarChar(10)
+  rest_path           String? @db.VarChar(500)
+  rest_body_template  String? @db.Text
+
+  // DB query config
+  database_config_id BigInt?                       @db.UnsignedBigInt
+  db_query_type      workflow_steps_db_query_type?
+  db_target_table    String?                       @db.VarChar(255)
+  db_primary_key     String?                       @db.VarChar(255)
+  db_extended_query  String?                       @db.Text
+
+  // Transform config
+  transform_expression String? @db.Text
+
+  // Condition config
+  condition_expression String? @db.Text
+  on_true_step         Int?
+  on_false_step        Int?
+
+  // Delay config
+  delay_seconds Int? @default(0)
+
+  // Common config
+  input_mapping   String?                 @db.Text
+  output_variable String?                 @default("result") @db.VarChar(255)
+  on_error        workflow_steps_on_error @default(stop)
+  max_retries     Int                     @default(3)
+  timeout_seconds Int                     @default(30)
+  is_active       Boolean                 @default(true)
+
+  created_at DateTime? @db.Timestamp(0)
+  updated_at DateTime? @db.Timestamp(0)
+
+  workflows           workflows             @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
+  rest_destinations   rest_destinations?    @relation(fields: [rest_destination_id], references: [id], onDelete: SetNull)
+  database_configs    database_configs?     @relation(fields: [database_config_id], references: [id], onDelete: SetNull)
+  step_field_mappings step_field_mappings[]
+
+  @@index([workflow_id], map: "workflow_steps_workflow_id_index")
+  @@index([workflow_id, step_order], map: "workflow_steps_order_index")
+}
+
+/// Field mappings for sequential workflow steps
+model step_field_mappings {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  step_id            BigInt    @db.UnsignedBigInt
+  source_field       String    @db.VarChar(255)
+  destination_column String    @db.VarChar(255)
+  data_type          String?   @db.VarChar(50)
+  transform_type     String?   @db.VarChar(50)
+  transform_param    String?   @db.VarChar(255)
+  default_value      String?   @db.VarChar(255)
+  null_handling      String?   @default("skip") @db.VarChar(50)
+  created_at         DateTime? @default(now()) @db.Timestamp(0)
+
+  workflow_steps workflow_steps @relation(fields: [step_id], references: [id], onDelete: Cascade)
+
+  @@index([step_id], map: "step_field_mappings_step_id_index")
 }

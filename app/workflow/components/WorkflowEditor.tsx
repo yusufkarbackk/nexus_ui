@@ -23,6 +23,8 @@ import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, Res
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
 import { SapMappingPanel } from './SapMappingPanel';
+import { SequentialStepEditor } from './SequentialStepEditor';
+import { StepConfigPanel } from './StepConfigPanel';
 import { edgeTypes } from './edges/OffsetSmoothStepEdge';
 import {
   DraggableNodeItem,
@@ -37,8 +39,9 @@ import {
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
-import { createWorkflow, updateWorkflow, fetchWorkflowById, Application, Destination, Workflow, RestDestination, SapDestination } from '@/app/lib/api';
-import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { createWorkflow, updateWorkflow, fetchWorkflowById, executeWorkflow, Application, Destination, Workflow, RestDestination, SapDestination } from '@/app/lib/api';
+import type { WorkflowType, WorkflowStepPayload } from '@/app/lib/api';
+import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle, GitBranch, Network } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeTypes: Record<string, React.ComponentType<any>> = {
@@ -92,6 +95,11 @@ function FlowCanvas() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
 
+  // Sequential workflow state
+  const [workflowType, setWorkflowType] = useState<WorkflowType>('fan_out');
+  const [sequentialSteps, setSequentialSteps] = useState<WorkflowStepPayload[]>([]);
+  const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+
   const [mappingPanel, setMappingPanel] = useState<MappingPanelState>({
     isOpen: false,
     sourceNodeId: '',
@@ -141,6 +149,51 @@ function FlowCanvas() {
           setWorkflowDescription(workflow.description || '');
           setRetentionHours(workflow.redisRetentionHours || 168);
           setDeleteFailedImmediately(workflow.deleteFailedImmediately || false);
+          setWorkflowType(workflow.workflowType || 'fan_out');
+
+          // Load sequential steps if sequential workflow
+          if (workflow.workflowType === 'sequential' && workflow.steps) {
+            const loadedSteps: WorkflowStepPayload[] = workflow.steps.map(s => ({
+              stepOrder: s.stepOrder,
+              stepName: s.stepName,
+              stepType: s.stepType,
+              restDestinationId: s.restDestinationId,
+              restMethod: s.restMethod,
+              restPath: s.restPath,
+              restBodyTemplate: s.restBodyTemplate,
+              databaseConfigId: s.databaseConfigId,
+              dbQueryType: s.dbQueryType,
+              dbTargetTable: s.dbTargetTable,
+              dbPrimaryKey: s.dbPrimaryKey,
+              dbExtendedQuery: s.dbExtendedQuery,
+              transformExpression: s.transformExpression,
+              conditionExpression: s.conditionExpression,
+              onTrueStep: s.onTrueStep,
+              onFalseStep: s.onFalseStep,
+              delaySeconds: s.delaySeconds,
+              inputMapping: s.inputMapping,
+              outputVariable: s.outputVariable,
+              onError: s.onError,
+              maxRetries: s.maxRetries,
+              timeoutSeconds: s.timeoutSeconds,
+              isActive: s.isActive,
+              fieldMappings: s.fieldMappings?.map(fm => ({
+                sourceField: fm.sourceField,
+                destinationColumn: fm.destinationColumn,
+                dataType: fm.dataType,
+                transformType: fm.transformType,
+                transformParam: fm.transformParam,
+                defaultValue: fm.defaultValue,
+                nullHandling: fm.nullHandling,
+              })) || [],
+            }));
+            setSequentialSteps(loadedSteps);
+            // Skip pipeline loading for sequential workflows
+            setNodes([]);
+            setEdges([]);
+            setPipelineConfigs(new Map());
+            return;
+          }
 
           // Reconstruct nodes and edges from pipelines
           const newNodes: WorkflowNode[] = [];
@@ -910,24 +963,71 @@ function FlowCanvas() {
   );
 
   const handleSave = async () => {
-    // Collect all pipeline configurations
-    const allConfigs = Array.from(pipelineConfigs.values());
+    // ─── Sequential Workflow Save ───
+    if (workflowType === 'sequential') {
+      if (sequentialSteps.length === 0) {
+        setSaveStatus('error');
+        setSaveMessage('Please add at least one step to the sequential workflow');
+        setTimeout(() => setSaveStatus('idle'), 3000);
+        return;
+      }
 
-    // Debug: log all configs before save
+      setIsSaving(true);
+      setSaveStatus('idle');
+
+      try {
+        let response;
+        const payload = {
+          name: workflowName,
+          description: workflowDescription || undefined,
+          isActive: true,
+          redisRetentionHours: retentionHours,
+          deleteFailedImmediately: deleteFailedImmediately,
+          workflowType: 'sequential' as const,
+          steps: sequentialSteps,
+        };
+
+        if (workflowId) {
+          response = await updateWorkflow(workflowId, payload);
+          if (response.success) {
+            setSaveStatus('success');
+            setSaveMessage('Sequential workflow updated successfully!');
+          } else {
+            throw new Error(response.message);
+          }
+        } else {
+          response = await createWorkflow(payload);
+          if (response.success) {
+            setSaveStatus('success');
+            setSaveMessage('Sequential workflow saved successfully!');
+            if (response.data) setWorkflowId(response.data.id);
+          } else {
+            throw new Error(response.message);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to save sequential workflow:', error);
+        setSaveStatus('error');
+        setSaveMessage(error instanceof Error ? error.message : 'Failed to save workflow');
+      } finally {
+        setIsSaving(false);
+        setTimeout(() => setSaveStatus('idle'), 3000);
+      }
+      return;
+    }
+
+    // ─── Fan-Out Workflow Save (existing logic) ───
+    const allConfigs = Array.from(pipelineConfigs.values());
     console.log('[DEBUG] Pipeline configs before save:', allConfigs.length, allConfigs);
 
-    // Deduplicate SAP pipelines based on source+destination+schema+table
-    // This prevents duplicate pipelines when workflow is loaded and saved without changes
     const uniqueConfigs = new Map<string, typeof allConfigs[0]>();
     for (const config of allConfigs) {
       let uniqueKey: string;
       if (config.destinationType === 'sap') {
-        // For SAP: unique by source + destination + schema + table
         uniqueKey = `sap-${config.sourceNodeId}-${config.targetNodeId}-${config.sapTargetSchema || 'default'}-${config.targetTable || 'none'}`;
       } else if (config.destinationType === 'rest') {
         uniqueKey = `rest-${config.sourceNodeId}-${config.targetNodeId}-${config.restDestinationId}`;
       } else {
-        // For database: unique by source + destination + table
         uniqueKey = `db-${config.sourceNodeId}-${config.targetNodeId}-${config.targetTable || 'none'}`;
       }
       uniqueConfigs.set(uniqueKey, config);
@@ -937,24 +1037,20 @@ function FlowCanvas() {
 
     const pipelines = Array.from(uniqueConfigs.values()).map((config) => ({
       sourceType: config.sourceType || 'sender_app',
-      // Source fields - either applicationId or mqttSourceId based on sourceType
       ...(config.sourceType === 'mqtt_source'
         ? { mqttSourceId: config.mqttSourceId }
         : { applicationId: config.applicationId }
       ),
       destinationType: config.destinationType || 'database',
-      // Database destination fields
       ...(config.destinationType === 'database' && {
         destinationId: config.destinationId,
         targetTable: config.targetTable,
         dbQueryType: config.dbQueryType,
         dbPrimaryKey: config.dbPrimaryKey,
       }),
-      // REST destination fields
       ...(config.destinationType === 'rest' && {
         restDestinationId: config.restDestinationId,
       }),
-      // SAP destination fields
       ...(config.destinationType === 'sap' && {
         sapDestinationId: config.sapDestinationId,
         sapQuery: config.sapQuery,
@@ -988,16 +1084,14 @@ function FlowCanvas() {
     try {
       let response;
 
-      // Use workflowId to determine if we should update or create
-      // workflowId is set when loading existing workflow OR after first save of new workflow
       if (workflowId) {
-        // Update existing workflow
         response = await updateWorkflow(workflowId, {
           name: workflowName,
           description: workflowDescription || undefined,
           isActive: true,
           redisRetentionHours: retentionHours,
           deleteFailedImmediately: deleteFailedImmediately,
+          workflowType: 'fan_out',
           pipelines,
         });
 
@@ -1009,13 +1103,13 @@ function FlowCanvas() {
           throw new Error(response.message);
         }
       } else {
-        // Create new workflow
         response = await createWorkflow({
           name: workflowName,
           description: workflowDescription || undefined,
           isActive: true,
           redisRetentionHours: retentionHours,
           deleteFailedImmediately: deleteFailedImmediately,
+          workflowType: 'fan_out',
           pipelines,
         });
 
@@ -1023,7 +1117,6 @@ function FlowCanvas() {
           setSaveStatus('success');
           setSaveMessage('Workflow saved successfully!');
           console.log('Workflow saved:', response.data);
-          // Set the workflow ID so subsequent saves will update instead of create
           if (response.data) {
             setWorkflowId(response.data.id);
           }
@@ -1041,9 +1134,27 @@ function FlowCanvas() {
     }
   };
 
-  const handleRun = () => {
-    console.log('Running workflow...');
-    // Here you would trigger workflow execution
+  const [isRunning, setIsRunning] = React.useState(false);
+
+  const handleRun = async () => {
+    if (!workflowId) {
+      setSaveStatus('error');
+      setSaveMessage('Please save the workflow first before running.');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+      return;
+    }
+    setIsRunning(true);
+    try {
+      const result = await executeWorkflow(workflowId);
+      setSaveStatus('success');
+      setSaveMessage(`Workflow queued! Message ID: ${result.message_id}`);
+    } catch (err: unknown) {
+      setSaveStatus('error');
+      setSaveMessage(err instanceof Error ? err.message : 'Failed to execute workflow');
+    } finally {
+      setIsRunning(false);
+      setTimeout(() => setSaveStatus('idle'), 4000);
+    }
   };
 
   // Show loading state
@@ -1059,265 +1170,306 @@ function FlowCanvas() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-slate-950">
-      {/* Sidebar */}
-      <Sidebar />
-
-      {/* Main Canvas */}
-      <div ref={reactFlowWrapper} className="flex-1 relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onEdgesDelete={onEdgesDelete}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          onEdgeClick={onEdgeClick}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          fitView
-          className="bg-slate-950"
-          defaultEdgeOptions={{
-            animated: true,
-            style: { stroke: '#6366f1', strokeWidth: 2 },
-          }}
-          connectionLineStyle={{ stroke: '#6366f1', strokeWidth: 2 }}
-          snapToGrid
-          snapGrid={[15, 15]}
-          deleteKeyCode={['Backspace', 'Delete']}
-        >
-          {/* Background Pattern */}
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={20}
-            size={1}
-            color="#334155"
+    <div className="flex flex-col h-screen w-full bg-slate-950">
+      {/* ── Shared Top Toolbar ── */}
+      <div className="flex items-center justify-between bg-slate-800/95 backdrop-blur-sm px-4 py-2 border-b border-slate-700 shadow-lg z-20 flex-shrink-0">
+        {/* Left: Workflow Name + Settings */}
+        <div className="flex items-center gap-3 min-w-0">
+          <input
+            type="text"
+            value={workflowName}
+            onChange={(e) => setWorkflowName(e.target.value)}
+            className="bg-transparent text-white font-semibold text-base outline-none border-none focus:ring-0 min-w-[140px] max-w-[220px]"
+            placeholder="Workflow name..."
           />
-
-          {/* Mini Map */}
-          <MiniMap
-            nodeStrokeColor={(node) => {
-              switch (node.type) {
-                case 'trigger':
-                  return '#3b82f6';
-                case 'action':
-                  return '#10b981';
-                case 'logic':
-                  return '#f59e0b';
-                case 'senderApp':
-                  return '#6366f1';
-                case 'destination':
-                  return '#14b8a6';
-                default:
-                  return '#64748b';
-              }
-            }}
-            nodeColor={(node) => {
-              switch (node.type) {
-                case 'trigger':
-                  return '#dbeafe';
-                case 'action':
-                  return '#d1fae5';
-                case 'logic':
-                  return '#fef3c7';
-                case 'senderApp':
-                  return '#e0e7ff';
-                case 'destination':
-                  return '#ccfbf1';
-                default:
-                  return '#f1f5f9';
-              }
-            }}
-            nodeBorderRadius={8}
-            maskColor="rgba(15, 23, 42, 0.8)"
-            className="!bg-slate-800 !border-slate-700 rounded-lg"
-          />
-
-          {/* Controls */}
-          <Controls
-            className="!bg-slate-800 !border-slate-700 !rounded-lg !shadow-lg"
-            showZoom={false}
-            showFitView={false}
-            showInteractive={false}
-          />
-
-          {/* Top Action Bar */}
-          <Panel position="top-center">
-            <div className="flex items-center gap-2 bg-slate-800/90 backdrop-blur-sm px-4 py-2 rounded-xl border border-slate-700 shadow-lg">
-              <button
-                onClick={() => zoomOut()}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => zoomIn()}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <div className="w-px h-6 bg-slate-600 mx-1" />
-              <button
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                title="Undo"
-              >
-                <Undo className="w-4 h-4" />
-              </button>
-              <button
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
-                title="Redo"
-              >
-                <Redo className="w-4 h-4" />
-              </button>
-              <div className="w-px h-6 bg-slate-600 mx-1" />
-              <button
-                onClick={handleSave}
-                disabled={isSaving}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isSaving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                Save
-              </button>
-              <button
-                onClick={handleRun}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors"
-              >
-                <Play className="w-4 h-4" />
-                Run
-              </button>
-            </div>
-          </Panel>
-
-          {/* Workflow Name & Settings */}
-          <Panel position="top-left" className="ml-4 mt-4">
-            <div className="bg-slate-800/90 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700 flex items-center gap-4">
+          <div className="w-px h-5 bg-slate-600 flex-shrink-0" />
+          <label className="flex items-center gap-1.5 cursor-pointer flex-shrink-0">
+            <input
+              type="checkbox"
+              checked={deleteFailedImmediately}
+              onChange={(e) => setDeleteFailedImmediately(e.target.checked)}
+              className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+            />
+            <span className="text-[11px] text-slate-400 whitespace-nowrap">Delete failed</span>
+          </label>
+          {!deleteFailedImmediately && (
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-[11px] text-slate-400">Retention:</span>
               <input
-                type="text"
-                value={workflowName}
-                onChange={(e) => setWorkflowName(e.target.value)}
-                className="bg-transparent text-white font-semibold text-lg outline-none border-none focus:ring-0"
-                placeholder="Workflow name..."
+                type="number"
+                min={0.1}
+                step={0.1}
+                value={retentionHours}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setRetentionHours(isNaN(val) ? 168 : val);
+                }}
+                className="w-14 px-1.5 py-0.5 bg-slate-700 text-white text-xs rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
+                title="Hours to keep failed messages"
               />
-              <div className="w-px h-6 bg-slate-600" />
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={deleteFailedImmediately}
-                    onChange={(e) => setDeleteFailedImmediately(e.target.checked)}
-                    className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
-                  />
-                  <span className="text-xs text-slate-400">Delete failed immediately</span>
-                </label>
-                {!deleteFailedImmediately && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-slate-500">|</span>
-                    <span className="text-xs text-slate-400">Retention:</span>
-                    <input
-                      type="number"
-                      min={0.1}
-                      step={0.1}
-                      value={retentionHours}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
-                        setRetentionHours(isNaN(val) ? 168 : val);
-                      }}
-                      className="w-16 px-2 py-1 bg-slate-700 text-white text-sm rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
-                      title="Hours to keep failed messages (e.g., 0.5 = 30 minutes)"
-                    />
-                    <span className="text-xs text-slate-400">minutes</span>
-                  </div>
-                )}
-              </div>
+              <span className="text-[11px] text-slate-400">min</span>
             </div>
-          </Panel>
-
-          {/* Save Status Message */}
-          {saveStatus !== 'idle' && (
-            <Panel position="top-right" className="mr-4 mt-4">
-              <div
-                className={`
-                  flex items-center gap-2 px-4 py-2 rounded-lg border backdrop-blur-sm
-                  ${saveStatus === 'success'
-                    ? 'bg-green-900/50 border-green-700 text-green-300'
-                    : 'bg-red-900/50 border-red-700 text-red-300'
-                  }
-                `}
-              >
-                {saveStatus === 'success' ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : (
-                  <AlertCircle className="w-4 h-4" />
-                )}
-                <span className="text-sm">{saveMessage}</span>
-              </div>
-            </Panel>
           )}
+        </div>
 
-          {/* Pipeline Count */}
-          <Panel position="bottom-left" className="ml-4 mb-4">
-            <div className="bg-slate-800/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-700">
-              <p className="text-xs text-slate-400">
-                <span className="text-white font-medium">{pipelineConfigs.size}</span> data mapping{pipelineConfigs.size !== 1 ? 's' : ''} configured
-              </p>
-            </div>
-          </Panel>
+        {/* Center: Mode Toggle */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700">
+            <button
+              onClick={() => setWorkflowType('fan_out')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${workflowType === 'fan_out'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+                }`}
+              title="Fan-Out: parallel pipelines from sources to destinations"
+            >
+              <Network className="w-3.5 h-3.5" />
+              Fan-Out
+            </button>
+            <button
+              onClick={() => setWorkflowType('sequential')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${(workflowType as string) === 'sequential'
+                ? 'bg-cyan-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+                }`}
+              title="Sequential: ordered steps executed one by one"
+            >
+              <GitBranch className="w-3.5 h-3.5" />
+              Sequential
+            </button>
+          </div>
+        </div>
 
-          {/* Drop Zone Hint */}
-          <Panel position="bottom-center" className="mb-4">
-            <div className="bg-slate-800/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700/50">
-              <p className="text-sm text-slate-400">
-                Drop sender apps and destinations here, then connect them to configure data mappings
-              </p>
+        {/* Right: Save + Run + Status */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {saveStatus !== 'idle' && (
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs ${saveStatus === 'success'
+              ? 'bg-green-900/50 border-green-700 text-green-300'
+              : 'bg-red-900/50 border-red-700 text-red-300'
+              }`}>
+              {saveStatus === 'success' ? <CheckCircle className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
+              <span>{saveMessage}</span>
             </div>
-          </Panel>
-        </ReactFlow>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50 border border-slate-600"
+          >
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
+            Save
+          </button>
+          <button
+            onClick={handleRun}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRunning ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Play className="w-3.5 h-3.5" />
+            )}
+            {isRunning ? 'Running...' : 'Run'}
+          </button>
+        </div>
       </div>
 
-      {/* Mapping Panel (Database & REST) */}
-      {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && (mappingPanel.targetDestination || mappingPanel.targetRestDestination) && (
-        <MappingPanel
-          isOpen={mappingPanel.isOpen}
-          onClose={handleMappingClose}
-          onSave={handleMappingSave}
-          sourceApplication={mappingPanel.sourceApplication || undefined}
-          mqttSource={mappingPanel.mqttSource || undefined}
-          targetType={mappingPanel.targetType}
-          targetDestination={mappingPanel.targetDestination}
-          targetRestDestination={mappingPanel.targetRestDestination}
-          sourceNodeId={mappingPanel.sourceNodeId}
-          targetNodeId={mappingPanel.targetNodeId}
-          existingConfig={mappingPanel.existingConfig || undefined}
-        />
-      )}
+      {/* ── Main Content Area (Sidebar + Editor) ── */}
+      <div className="flex flex-1 min-h-0">
+        {/* Sidebar */}
+        <Sidebar workflowType={workflowType} />
 
-      {/* SAP Mapping Panel */}
-      {(sapMappingPanel.sourceApplication || sapMappingPanel.mqttSource) && sapMappingPanel.targetSapDestination && (
-        <SapMappingPanel
-          key={`sap-panel-${sapMappingPanel.sourceNodeId}-${sapMappingPanel.targetNodeId}-${sapMappingPanel.existingConfig?.targetTable || 'new'}-${sapMappingPanel.existingConfig?.sapTargetSchema || 'default'}`}
-          isOpen={sapMappingPanel.isOpen}
-          onClose={() => setSapMappingPanel({ ...sapMappingPanel, isOpen: false })}
-          onSave={(config) => {
-            handleMappingSave(config);
-            setSapMappingPanel({ ...sapMappingPanel, isOpen: false });
-          }}
-          sourceApplication={sapMappingPanel.sourceApplication || undefined}
-          mqttSource={sapMappingPanel.mqttSource || undefined}
-          targetSapDestination={sapMappingPanel.targetSapDestination}
-          sourceNodeId={sapMappingPanel.sourceNodeId}
-          targetNodeId={sapMappingPanel.targetNodeId}
-          existingConfig={sapMappingPanel.existingConfig || undefined}
-        />
-      )}
+        {/* Content — conditional: fan-out canvas vs sequential editor */}
+        {workflowType === 'sequential' ? (
+          <div className="flex flex-1 relative">
+            {/* Sequential Step List */}
+            <div className="w-[380px] border-r border-slate-700 bg-slate-900">
+              <SequentialStepEditor
+                steps={sequentialSteps}
+                onStepsChange={setSequentialSteps}
+                selectedStepIndex={selectedStepIndex}
+                onSelectStep={setSelectedStepIndex}
+              />
+            </div>
+
+            {/* Step Config Panel */}
+            {selectedStepIndex !== null && sequentialSteps[selectedStepIndex] && (
+              <StepConfigPanel
+                step={sequentialSteps[selectedStepIndex]}
+                stepIndex={selectedStepIndex}
+                onUpdate={(updated) => {
+                  const newSteps = [...sequentialSteps];
+                  newSteps[selectedStepIndex] = updated;
+                  setSequentialSteps(newSteps);
+                }}
+                onClose={() => setSelectedStepIndex(null)}
+              />
+            )}
+
+            {/* Sequential Info Panel (when no step is selected) */}
+            {selectedStepIndex === null && (
+              <div className="flex-1 flex items-center justify-center bg-slate-950">
+                <div className="text-center max-w-md">
+                  <GitBranch className="w-16 h-16 text-cyan-500/30 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-300 mb-2">Sequential Workflow</h3>
+                  <p className="text-sm text-slate-500 mb-4">
+                    Steps execute in order, with each step&apos;s output available to the next.
+                    Add steps from the panel on the left, then click a step to configure it.
+                  </p>
+                  <div className="flex items-center justify-center gap-6 text-xs text-slate-600">
+                    <span><strong className="text-white">{sequentialSteps.length}</strong> step{sequentialSteps.length !== 1 ? 's' : ''}</span>
+                    <span><strong className="text-white">{sequentialSteps.filter(s => s.isActive).length}</strong> active</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div ref={reactFlowWrapper} className="flex-1 relative">
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onEdgesDelete={onEdgesDelete}
+                onConnect={onConnect}
+                onNodeClick={onNodeClick}
+                onEdgeClick={onEdgeClick}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                fitView
+                className="bg-slate-950"
+                defaultEdgeOptions={{
+                  animated: true,
+                  style: { stroke: '#6366f1', strokeWidth: 2 },
+                }}
+                connectionLineStyle={{ stroke: '#6366f1', strokeWidth: 2 }}
+                snapToGrid
+                snapGrid={[15, 15]}
+                deleteKeyCode={['Backspace', 'Delete']}
+              >
+                {/* Background Pattern */}
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={20}
+                  size={1}
+                  color="#334155"
+                />
+
+                {/* Mini Map */}
+                <MiniMap
+                  nodeStrokeColor={(node) => {
+                    switch (node.type) {
+                      case 'trigger':
+                        return '#3b82f6';
+                      case 'action':
+                        return '#10b981';
+                      case 'logic':
+                        return '#f59e0b';
+                      case 'senderApp':
+                        return '#6366f1';
+                      case 'destination':
+                        return '#14b8a6';
+                      default:
+                        return '#64748b';
+                    }
+                  }}
+                  nodeColor={(node) => {
+                    switch (node.type) {
+                      case 'trigger':
+                        return '#dbeafe';
+                      case 'action':
+                        return '#d1fae5';
+                      case 'logic':
+                        return '#fef3c7';
+                      case 'senderApp':
+                        return '#e0e7ff';
+                      case 'destination':
+                        return '#ccfbf1';
+                      default:
+                        return '#f1f5f9';
+                    }
+                  }}
+                  nodeBorderRadius={8}
+                  maskColor="rgba(15, 23, 42, 0.8)"
+                  className="!bg-slate-800 !border-slate-700 rounded-lg"
+                />
+
+                {/* Controls */}
+                <Controls
+                  className="!bg-slate-800 !border-slate-700 !rounded-lg !shadow-lg"
+                  showZoom={false}
+                  showFitView={false}
+                  showInteractive={false}
+                />
+
+
+
+                {/* Pipeline Count */}
+                <Panel position="bottom-left" className="ml-4 mb-4">
+                  <div className="bg-slate-800/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-700">
+                    <p className="text-xs text-slate-400">
+                      <span className="text-white font-medium">{pipelineConfigs.size}</span> data mapping{pipelineConfigs.size !== 1 ? 's' : ''} configured
+                    </p>
+                  </div>
+                </Panel>
+
+                {/* Drop Zone Hint */}
+                <Panel position="bottom-center" className="mb-4">
+                  <div className="bg-slate-800/60 backdrop-blur-sm px-4 py-2 rounded-lg border border-slate-700/50">
+                    <p className="text-sm text-slate-400">
+                      Drop sender apps and destinations here, then connect them to configure data mappings
+                    </p>
+                  </div>
+                </Panel>
+              </ReactFlow>
+            </div>
+
+            {/* Mapping Panel (Database & REST) */}
+            {(mappingPanel.sourceApplication || mappingPanel.mqttSource) && (mappingPanel.targetDestination || mappingPanel.targetRestDestination) && (
+              <MappingPanel
+                isOpen={mappingPanel.isOpen}
+                onClose={handleMappingClose}
+                onSave={handleMappingSave}
+                sourceApplication={mappingPanel.sourceApplication || undefined}
+                mqttSource={mappingPanel.mqttSource || undefined}
+                targetType={mappingPanel.targetType}
+                targetDestination={mappingPanel.targetDestination}
+                targetRestDestination={mappingPanel.targetRestDestination}
+                sourceNodeId={mappingPanel.sourceNodeId}
+                targetNodeId={mappingPanel.targetNodeId}
+                existingConfig={mappingPanel.existingConfig || undefined}
+              />
+            )}
+
+            {/* SAP Mapping Panel */}
+            {(sapMappingPanel.sourceApplication || sapMappingPanel.mqttSource) && sapMappingPanel.targetSapDestination && (
+              <SapMappingPanel
+                key={`sap-panel-${sapMappingPanel.sourceNodeId}-${sapMappingPanel.targetNodeId}-${sapMappingPanel.existingConfig?.targetTable || 'new'}-${sapMappingPanel.existingConfig?.sapTargetSchema || 'default'}`}
+                isOpen={sapMappingPanel.isOpen}
+                onClose={() => setSapMappingPanel({ ...sapMappingPanel, isOpen: false })}
+                onSave={(config) => {
+                  handleMappingSave(config);
+                  setSapMappingPanel({ ...sapMappingPanel, isOpen: false });
+                }}
+                sourceApplication={sapMappingPanel.sourceApplication || undefined}
+                mqttSource={sapMappingPanel.mqttSource || undefined}
+                targetSapDestination={sapMappingPanel.targetSapDestination}
+                sourceNodeId={sapMappingPanel.sourceNodeId}
+                targetNodeId={sapMappingPanel.targetNodeId}
+                existingConfig={sapMappingPanel.existingConfig || undefined}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { DraggableNodeItem, nodeCategories } from '../types/workflowTypes';
+import type { WorkflowType } from '@/app/lib/api';
 import { draggableNodes } from '../data/initialData';
 import {
   fetchApplications,
@@ -52,6 +53,7 @@ const iconMap: Record<string, LucideIcon> = {
 
 interface SidebarProps {
   className?: string;
+  workflowType?: WorkflowType;
 }
 
 function DraggableNode({ node }: { node: DraggableNodeItem }) {
@@ -111,7 +113,7 @@ function DraggableNode({ node }: { node: DraggableNodeItem }) {
   );
 }
 
-export function Sidebar({ className }: SidebarProps) {
+export function Sidebar({ className, workflowType = 'fan_out' }: SidebarProps) {
   const [applications, setApplications] = useState<Application[]>([]);
   const [destinations, setDestinations] = useState<Destination[]>([]);
   const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
@@ -273,237 +275,248 @@ export function Sidebar({ className }: SidebarProps) {
 
       {/* Node Categories */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Sender Apps */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-indigo-500" />
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                Sender Apps
-              </h3>
-            </div>
-            <button
-              onClick={loadApplications}
-              disabled={isLoadingApps}
-              className="p-1 hover:bg-slate-700 rounded transition-colors"
-              title="Refresh sender apps"
-            >
-              {isLoadingApps ? (
-                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3 text-slate-500" />
-              )}
-            </button>
+        {workflowType === 'sequential' ? (
+          <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+            <GitBranch className="w-10 h-10 mb-3 opacity-30" />
+            <p className="text-sm font-medium text-slate-400">Sequential Mode</p>
+            <p className="text-xs text-center mt-2 px-4 text-slate-500">Use the step editor panel to add and configure workflow steps.</p>
           </div>
-          <div className="space-y-2">
-            {isLoadingApps ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+        ) : (
+          <>
+            {/* Sender Apps */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Sender Apps
+                  </h3>
+                </div>
+                <button
+                  onClick={loadApplications}
+                  disabled={isLoadingApps}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh sender apps"
+                >
+                  {isLoadingApps ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
               </div>
-            ) : senderAppNodes.length > 0 ? (
-              senderAppNodes.map((node) => (
-                <DraggableNode key={`app-${node.applicationId}`} node={node} />
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 text-center py-2">
-                No sender apps found
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* MQTT Sources */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                MQTT Sources
-              </h3>
-            </div>
-            <button
-              onClick={loadMqttSources}
-              disabled={isLoadingMqtt}
-              className="p-1 hover:bg-slate-700 rounded transition-colors"
-              title="Refresh MQTT sources"
-            >
-              {isLoadingMqtt ? (
-                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3 text-slate-500" />
-              )}
-            </button>
-          </div>
-          <div className="space-y-2">
-            {isLoadingMqtt ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+              <div className="space-y-2">
+                {isLoadingApps ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : senderAppNodes.length > 0 ? (
+                  senderAppNodes.map((node) => (
+                    <DraggableNode key={`app-${node.applicationId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No sender apps found
+                  </p>
+                )}
               </div>
-            ) : mqttSourceNodes.length > 0 ? (
-              mqttSourceNodes.map((node) => (
-                <DraggableNode key={`mqtt-${node.mqttSourceId}`} node={node} />
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 text-center py-2">
-                No MQTT sources found
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Destinations */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-teal-500" />
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                DB Destinations
-              </h3>
             </div>
-            <button
-              onClick={loadDestinations}
-              disabled={isLoadingDests}
-              className="p-1 hover:bg-slate-700 rounded transition-colors"
-              title="Refresh destinations"
-            >
-              {isLoadingDests ? (
-                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3 text-slate-500" />
-              )}
-            </button>
-          </div>
-          <div className="space-y-2">
-            {isLoadingDests ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
-              </div>
-            ) : destinationNodes.length > 0 ? (
-              destinationNodes.map((node) => (
-                <DraggableNode key={`dest-${node.destinationId}`} node={node} />
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 text-center py-2">
-                No destinations found
-              </p>
-            )}
-          </div>
-        </div>
 
-        {/* REST Destinations */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-orange-500" />
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                REST APIs
-              </h3>
+            {/* MQTT Sources */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    MQTT Sources
+                  </h3>
+                </div>
+                <button
+                  onClick={loadMqttSources}
+                  disabled={isLoadingMqtt}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh MQTT sources"
+                >
+                  {isLoadingMqtt ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {isLoadingMqtt ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : mqttSourceNodes.length > 0 ? (
+                  mqttSourceNodes.map((node) => (
+                    <DraggableNode key={`mqtt-${node.mqttSourceId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No MQTT sources found
+                  </p>
+                )}
+              </div>
             </div>
-            <button
-              onClick={loadRestDestinations}
-              disabled={isLoadingRestDests}
-              className="p-1 hover:bg-slate-700 rounded transition-colors"
-              title="Refresh REST destinations"
-            >
-              {isLoadingRestDests ? (
-                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3 text-slate-500" />
-              )}
-            </button>
-          </div>
-          <div className="space-y-2">
-            {isLoadingRestDests ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
-              </div>
-            ) : restDestinationNodes.length > 0 ? (
-              restDestinationNodes.map((node) => (
-                <DraggableNode key={`rest-${node.restDestinationId}`} node={node} />
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 text-center py-2">
-                No REST APIs configured
-              </p>
-            )}
-          </div>
-        </div>
 
-        {/* SAP Destinations */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-rose-500" />
-              <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                SAP ODBC
-              </h3>
+            {/* Destinations */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-teal-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    DB Destinations
+                  </h3>
+                </div>
+                <button
+                  onClick={loadDestinations}
+                  disabled={isLoadingDests}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh destinations"
+                >
+                  {isLoadingDests ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {isLoadingDests ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : destinationNodes.length > 0 ? (
+                  destinationNodes.map((node) => (
+                    <DraggableNode key={`dest-${node.destinationId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No destinations found
+                  </p>
+                )}
+              </div>
             </div>
-            <button
-              onClick={loadSapDestinations}
-              disabled={isLoadingSap}
-              className="p-1 hover:bg-slate-700 rounded transition-colors"
-              title="Refresh SAP destinations"
-            >
-              {isLoadingSap ? (
-                <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
-              ) : (
-                <RefreshCw className="w-3 h-3 text-slate-500" />
-              )}
-            </button>
-          </div>
-          <div className="space-y-2">
-            {isLoadingSap ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+
+            {/* REST Destinations */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-orange-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    REST APIs
+                  </h3>
+                </div>
+                <button
+                  onClick={loadRestDestinations}
+                  disabled={isLoadingRestDests}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh REST destinations"
+                >
+                  {isLoadingRestDests ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
               </div>
-            ) : sapDestinationNodes.length > 0 ? (
-              sapDestinationNodes.map((node) => (
-                <DraggableNode key={`sap-${node.sapDestinationId}`} node={node} />
-              ))
-            ) : (
-              <p className="text-xs text-slate-500 text-center py-2">
-                No SAP destinations configured
+              <div className="space-y-2">
+                {isLoadingRestDests ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : restDestinationNodes.length > 0 ? (
+                  restDestinationNodes.map((node) => (
+                    <DraggableNode key={`rest-${node.restDestinationId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No REST APIs configured
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* SAP Destinations */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-rose-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    SAP ODBC
+                  </h3>
+                </div>
+                <button
+                  onClick={loadSapDestinations}
+                  disabled={isLoadingSap}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh SAP destinations"
+                >
+                  {isLoadingSap ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {isLoadingSap ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : sapDestinationNodes.length > 0 ? (
+                  sapDestinationNodes.map((node) => (
+                    <DraggableNode key={`sap-${node.sapDestinationId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No SAP destinations configured
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-slate-700 pt-4">
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">
+                Additional Nodes
               </p>
-            )}
-          </div>
-        </div>
+            </div>
 
-        {/* Divider */}
-        <div className="border-t border-slate-700 pt-4">
-          <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-3">
-            Additional Nodes
-          </p>
-        </div>
+            {/* Trigger Nodes */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 rounded-full bg-blue-500" />
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Triggers
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {triggerNodes.map((node) => (
+                  <DraggableNode key={`${node.type}-${node.label}`} node={node} />
+                ))}
+              </div>
+            </div>
 
-        {/* Trigger Nodes */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-blue-500" />
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Triggers
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {triggerNodes.map((node) => (
-              <DraggableNode key={`${node.type}-${node.label}`} node={node} />
-            ))}
-          </div>
-        </div>
+            {/* Logic Nodes */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-2 h-2 rounded-full bg-amber-500" />
+                <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  Logic
+                </h3>
+              </div>
+              <div className="space-y-2">
+                {logicNodes.map((node) => (
+                  <DraggableNode key={`${node.type}-${node.label}`} node={node} />
+                ))}
+              </div>
+            </div>
 
-        {/* Logic Nodes */}
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Logic
-            </h3>
-          </div>
-          <div className="space-y-2">
-            {logicNodes.map((node) => (
-              <DraggableNode key={`${node.type}-${node.label}`} node={node} />
-            ))}
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Footer */}
