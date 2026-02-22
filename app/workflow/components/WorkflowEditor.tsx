@@ -39,9 +39,9 @@ import {
   PipelineConfig,
   WorkflowEdge,
 } from '../types/workflowTypes';
-import { createWorkflow, updateWorkflow, fetchWorkflowById, executeWorkflow, Application, Destination, Workflow, RestDestination, SapDestination } from '@/app/lib/api';
+import { createWorkflow, updateWorkflow, fetchWorkflowById, executeWorkflow, fetchApplications, Application, Destination, Workflow, RestDestination, SapDestination } from '@/app/lib/api';
 import type { WorkflowType, WorkflowStepPayload } from '@/app/lib/api';
-import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle, GitBranch, Network } from 'lucide-react';
+import { Save, Play, Undo, Redo, ZoomIn, ZoomOut, Loader2, CheckCircle, AlertCircle, GitBranch, Network, Send } from 'lucide-react';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const nodeTypes: Record<string, React.ComponentType<any>> = {
@@ -99,6 +99,8 @@ function FlowCanvas() {
   const [workflowType, setWorkflowType] = useState<WorkflowType>('fan_out');
   const [sequentialSteps, setSequentialSteps] = useState<WorkflowStepPayload[]>([]);
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
+  const [triggerAppId, setTriggerAppId] = useState<number | null>(null);
+  const [triggerApplications, setTriggerApplications] = useState<Application[]>([]);
 
   const [mappingPanel, setMappingPanel] = useState<MappingPanelState>({
     isOpen: false,
@@ -166,6 +168,9 @@ function FlowCanvas() {
               dbTargetTable: s.dbTargetTable,
               dbPrimaryKey: s.dbPrimaryKey,
               dbExtendedQuery: s.dbExtendedQuery,
+              sapDestinationId: s.sapDestinationId,
+              sapQueryType: s.sapQueryType,
+              sapSqlQuery: s.sapSqlQuery,
               transformExpression: s.transformExpression,
               conditionExpression: s.conditionExpression,
               onTrueStep: s.onTrueStep,
@@ -188,6 +193,13 @@ function FlowCanvas() {
               })) || [],
             }));
             setSequentialSteps(loadedSteps);
+            // Extract trigger app from routing pipeline
+            if (workflow.pipelines && workflow.pipelines.length > 0) {
+              const routingPipeline = workflow.pipelines.find(p => p.applicationId);
+              if (routingPipeline && routingPipeline.applicationId) {
+                setTriggerAppId(routingPipeline.applicationId);
+              }
+            }
             // Skip pipeline loading for sequential workflows
             setNodes([]);
             setEdges([]);
@@ -453,6 +465,19 @@ function FlowCanvas() {
 
     loadWorkflow();
   }, [editId, setNodes, setEdges]);
+
+  // Load applications for sequential trigger source dropdown
+  useEffect(() => {
+    async function loadApps() {
+      try {
+        const response = await fetchApplications();
+        setTriggerApplications(response.data);
+      } catch (error) {
+        console.error('Failed to load applications for trigger source:', error);
+      }
+    }
+    loadApps();
+  }, []);
 
   // Handle connection between nodes
   const onConnect = useCallback(
@@ -985,6 +1010,15 @@ function FlowCanvas() {
           deleteFailedImmediately: deleteFailedImmediately,
           workflowType: 'sequential' as const,
           steps: sequentialSteps,
+          pipelines: triggerAppId ? [{
+            sourceType: 'sender_app' as const,
+            applicationId: triggerAppId,
+            destinationType: 'database' as const,
+            destinationId: 0,
+            targetTable: '',
+            isActive: true,
+            fieldMappings: [],
+          }] : [],
         };
 
         if (workflowId) {
@@ -1323,6 +1357,25 @@ function FlowCanvas() {
                   <div className="flex items-center justify-center gap-6 text-xs text-slate-600">
                     <span><strong className="text-white">{sequentialSteps.length}</strong> step{sequentialSteps.length !== 1 ? 's' : ''}</span>
                     <span><strong className="text-white">{sequentialSteps.filter(s => s.isActive).length}</strong> active</span>
+                  </div>
+
+                  {/* Trigger Source Selector */}
+                  <div className="mt-6 text-left">
+                    <label className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+                      <Send className="w-3.5 h-3.5" />
+                      Trigger Source (Sender App)
+                    </label>
+                    <select
+                      value={triggerAppId || ''}
+                      onChange={(e) => setTriggerAppId(e.target.value ? Number(e.target.value) : null)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-sm text-white focus:outline-none focus:border-cyan-500"
+                    >
+                      <option value="">No sender app (manual/webhook only)</option>
+                      {triggerApplications.map(app => (
+                        <option key={app.id} value={app.id}>{app.name}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-600 mt-1">Select a sender app to trigger this workflow externally.</p>
                   </div>
                 </div>
               </div>

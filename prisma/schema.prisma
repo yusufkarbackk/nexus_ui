@@ -388,6 +388,7 @@ model sap_destinations {
   database_name        String?                 @db.VarChar(255) // For SAP HANA MDC (Multitenant) - tenant database name
   pipelines            pipelines[]
   sap_pipeline_configs sap_pipeline_configs[]
+  workflow_steps       workflow_steps[]
 
   @@index([status], map: "sap_destinations_status_index")
 }
@@ -545,6 +546,7 @@ enum workflows_type {
 enum workflow_steps_step_type {
   rest_call
   db_query
+  sap_query
   transform
   condition
   delay
@@ -585,6 +587,11 @@ model workflow_steps {
   db_primary_key     String?                       @db.VarChar(255)
   db_extended_query  String?                       @db.Text
 
+  // SAP query config
+  sap_destination_id BigInt? @db.UnsignedBigInt
+  sap_query_type     String? @db.VarChar(50)
+  sap_sql_query      String? @db.Text
+
   // Transform config
   transform_expression String? @db.Text
 
@@ -610,6 +617,7 @@ model workflow_steps {
   workflows           workflows             @relation(fields: [workflow_id], references: [id], onDelete: Cascade)
   rest_destinations   rest_destinations?    @relation(fields: [rest_destination_id], references: [id], onDelete: SetNull)
   database_configs    database_configs?     @relation(fields: [database_config_id], references: [id], onDelete: SetNull)
+  sap_destinations    sap_destinations?     @relation(fields: [sap_destination_id], references: [id], onDelete: SetNull)
   step_field_mappings step_field_mappings[]
 
   @@index([workflow_id], map: "workflow_steps_workflow_id_index")

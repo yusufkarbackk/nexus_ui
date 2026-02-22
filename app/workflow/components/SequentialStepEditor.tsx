@@ -22,6 +22,7 @@ import type { WorkflowStepPayload, StepFieldMappingPayload } from '@/app/lib/api
 export const STEP_TYPE_META: Record<StepType, { label: string; icon: React.ElementType; color: string; bgColor: string; borderColor: string; description: string }> = {
     rest_call: { label: 'REST Call', icon: Globe, color: 'text-orange-400', bgColor: 'bg-orange-900/30', borderColor: 'border-orange-500/50', description: 'Call a REST API endpoint' },
     db_query: { label: 'DB Query', icon: Database, color: 'text-teal-400', bgColor: 'bg-teal-900/30', borderColor: 'border-teal-500/50', description: 'Run a database query' },
+    sap_query: { label: 'SAP Query', icon: Database, color: 'text-rose-400', bgColor: 'bg-rose-900/30', borderColor: 'border-rose-500/50', description: 'Run a SAP HANA query' },
     transform: { label: 'Transform', icon: Shuffle, color: 'text-purple-400', bgColor: 'bg-purple-900/30', borderColor: 'border-purple-500/50', description: 'Transform data payload' },
     condition: { label: 'Condition', icon: GitBranch, color: 'text-amber-400', bgColor: 'bg-amber-900/30', borderColor: 'border-amber-500/50', description: 'Conditional branching' },
     delay: { label: 'Delay', icon: Clock, color: 'text-sky-400', bgColor: 'bg-sky-900/30', borderColor: 'border-sky-500/50', description: 'Wait for a duration' },
@@ -42,6 +43,7 @@ export function createDefaultStep(stepType: StepType, order: number): WorkflowSt
         ...(stepType === 'delay' && { delaySeconds: 5 }),
         ...(stepType === 'rest_call' && { restMethod: 'POST' }),
         ...(stepType === 'db_query' && { dbQueryType: 'insert' }),
+        ...(stepType === 'sap_query' && { sapQueryType: 'select' }),
     };
 }
 

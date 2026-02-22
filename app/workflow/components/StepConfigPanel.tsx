@@ -16,8 +16,10 @@ import type { WorkflowStepPayload } from '@/app/lib/api';
 import {
     fetchRestDestinations,
     fetchDestinations,
+    fetchSapDestinations,
     type RestDestination,
     type Destination,
+    type SapDestination,
 } from '@/app/lib/api';
 import { STEP_TYPE_META } from './SequentialStepEditor';
 
@@ -35,6 +37,7 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
     // Resources for dropdowns
     const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
     const [dbDestinations, setDbDestinations] = useState<Destination[]>([]);
+    const [sapDestinations, setSapDestinations] = useState<SapDestination[]>([]);
 
     useEffect(() => {
         if (step.stepType === 'rest_call') {
@@ -42,6 +45,9 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
         }
         if (step.stepType === 'db_query') {
             fetchDestinations().then(r => setDbDestinations(r.data || [])).catch(() => { });
+        }
+        if (step.stepType === 'sap_query') {
+            fetchSapDestinations().then(r => setSapDestinations(r.data || [])).catch(() => { });
         }
     }, [step.stepType]);
 
@@ -204,6 +210,48 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 </p>
                             </FieldGroup>
                         )}
+                    </>
+                )}
+
+                {/* ── SAP Query Config ── */}
+                {step.stepType === 'sap_query' && (
+                    <>
+                        <FieldGroup label="SAP Destination">
+                            <select
+                                value={step.sapDestinationId || ''}
+                                onChange={(e) => updateField('sapDestinationId', e.target.value ? Number(e.target.value) : undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-rose-500 outline-none"
+                            >
+                                <option value="">Select SAP destination...</option>
+                                {sapDestinations.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name} — {d.dsn_name}</option>
+                                ))}
+                            </select>
+                        </FieldGroup>
+
+                        <FieldGroup label="Query Type">
+                            <select
+                                value={step.sapQueryType || 'select'}
+                                onChange={(e) => updateField('sapQueryType', e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-rose-500 outline-none"
+                            >
+                                <option value="select">SELECT</option>
+                                <option value="insert">INSERT</option>
+                            </select>
+                        </FieldGroup>
+
+                        <FieldGroup label="SQL Query">
+                            <textarea
+                                value={step.sapSqlQuery || ''}
+                                onChange={(e) => updateField('sapSqlQuery', e.target.value || undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none resize-y min-h-[100px]"
+                                placeholder={"SELECT * FROM \"SCHEMA\".\"TABLE\" WHERE \"COLUMN\" = :param"}
+                                rows={5}
+                            />
+                            <p className="text-[11px] text-slate-500 mt-1">
+                                SAP HANA SQL query. Use <code className="text-rose-400">:param</code> for parameter placeholders.
+                            </p>
+                        </FieldGroup>
                     </>
                 )}
 

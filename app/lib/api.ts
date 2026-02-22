@@ -447,7 +447,7 @@ export interface FieldMappingPayload {
 
 export type DestinationType = 'database' | 'rest' | 'sap';
 export type WorkflowType = 'fan_out' | 'sequential';
-export type StepType = 'rest_call' | 'db_query' | 'transform' | 'condition' | 'delay';
+export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay';
 export type StepErrorHandling = 'stop' | 'skip' | 'retry';
 
 // Sequential workflow step field mapping
@@ -490,6 +490,10 @@ export interface WorkflowStepPayload {
   dbTargetTable?: string;
   dbPrimaryKey?: string;
   dbExtendedQuery?: string;
+  // SAP query config
+  sapDestinationId?: number;
+  sapQueryType?: string;
+  sapSqlQuery?: string;
   // Transform config
   transformExpression?: string;
   // Condition config
@@ -526,6 +530,10 @@ export interface WorkflowStep {
   dbTargetTable?: string;
   dbPrimaryKey?: string;
   dbExtendedQuery?: string;
+  // SAP query config
+  sapDestinationId?: number;
+  sapQueryType?: string;
+  sapSqlQuery?: string;
   // Transform config
   transformExpression?: string;
   // Condition config
@@ -545,6 +553,7 @@ export interface WorkflowStep {
   // Expanded references
   restDestination?: RestDestination;
   destination?: Destination;
+  sapDestination?: SapDestination;
   createdAt: string;
   updatedAt: string;
 }
