@@ -26,6 +26,7 @@ export const STEP_TYPE_META: Record<StepType, { label: string; icon: React.Eleme
     transform: { label: 'Transform', icon: Shuffle, color: 'text-purple-400', bgColor: 'bg-purple-900/30', borderColor: 'border-purple-500/50', description: 'Transform data payload' },
     condition: { label: 'Condition', icon: GitBranch, color: 'text-amber-400', bgColor: 'bg-amber-900/30', borderColor: 'border-amber-500/50', description: 'Conditional branching' },
     delay: { label: 'Delay', icon: Clock, color: 'text-sky-400', bgColor: 'bg-sky-900/30', borderColor: 'border-sky-500/50', description: 'Wait for a duration' },
+    redis_command: { label: 'Redis', icon: Database, color: 'text-red-400', bgColor: 'bg-red-900/30', borderColor: 'border-red-500/50', description: 'Read/write Redis data' },
 };
 
 // ─── Default step factory ─────────────────────────────────────────
@@ -44,6 +45,7 @@ export function createDefaultStep(stepType: StepType, order: number): WorkflowSt
         ...(stepType === 'rest_call' && { restMethod: 'POST' }),
         ...(stepType === 'db_query' && { dbQueryType: 'insert' }),
         ...(stepType === 'sap_query' && { sapQueryType: 'select' }),
+        ...(stepType === 'redis_command' && { redisCommand: 'GET' }),
     };
 }
 

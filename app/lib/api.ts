@@ -447,7 +447,7 @@ export interface FieldMappingPayload {
 
 export type DestinationType = 'database' | 'rest' | 'sap';
 export type WorkflowType = 'fan_out' | 'sequential';
-export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay';
+export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay' | 'redis_command';
 export type StepErrorHandling = 'stop' | 'skip' | 'retry';
 
 // Sequential workflow step field mapping
@@ -484,6 +484,7 @@ export interface WorkflowStepPayload {
   restMethod?: string;
   restPath?: string;
   restBodyTemplate?: string;
+  restHeadersTemplate?: string;
   // DB query config
   databaseConfigId?: number;
   dbQueryType?: string;
@@ -502,6 +503,12 @@ export interface WorkflowStepPayload {
   onFalseStep?: number;
   // Delay config
   delaySeconds?: number;
+  // Redis command config
+  redisCommand?: string;
+  redisKey?: string;
+  redisField?: string;
+  redisValue?: string;
+  redisTTL?: number;
   // Common config
   inputMapping?: string;
   outputVariable?: string;
@@ -524,6 +531,7 @@ export interface WorkflowStep {
   restMethod?: string;
   restPath?: string;
   restBodyTemplate?: string;
+  restHeadersTemplate?: string;
   // DB query config
   databaseConfigId?: number;
   dbQueryType?: string;
@@ -542,6 +550,12 @@ export interface WorkflowStep {
   onFalseStep?: number;
   // Delay config
   delaySeconds?: number;
+  // Redis command config
+  redisCommand?: string;
+  redisKey?: string;
+  redisField?: string;
+  redisValue?: string;
+  redisTTL?: number;
   // Common config
   inputMapping?: string;
   outputVariable?: string;
@@ -668,6 +682,7 @@ export interface Workflow {
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
   workflowType?: WorkflowType;
+  webhookToken?: string;
   pipelines: Pipeline[];
   steps?: WorkflowStep[];
   createdAt: string;

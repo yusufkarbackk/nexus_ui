@@ -101,6 +101,7 @@ function FlowCanvas() {
   const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
   const [triggerAppId, setTriggerAppId] = useState<number | null>(null);
   const [triggerApplications, setTriggerApplications] = useState<Application[]>([]);
+  const [webhookToken, setWebhookToken] = useState<string | null>(null);
 
   const [mappingPanel, setMappingPanel] = useState<MappingPanelState>({
     isOpen: false,
@@ -152,6 +153,9 @@ function FlowCanvas() {
           setRetentionHours(workflow.redisRetentionHours || 168);
           setDeleteFailedImmediately(workflow.deleteFailedImmediately || false);
           setWorkflowType(workflow.workflowType || 'fan_out');
+          if (workflow.webhookToken) {
+            setWebhookToken(workflow.webhookToken);
+          }
 
           // Load sequential steps if sequential workflow
           if (workflow.workflowType === 'sequential' && workflow.steps) {
@@ -163,6 +167,7 @@ function FlowCanvas() {
               restMethod: s.restMethod,
               restPath: s.restPath,
               restBodyTemplate: s.restBodyTemplate,
+              restHeadersTemplate: s.restHeadersTemplate,
               databaseConfigId: s.databaseConfigId,
               dbQueryType: s.dbQueryType,
               dbTargetTable: s.dbTargetTable,
@@ -176,6 +181,11 @@ function FlowCanvas() {
               onTrueStep: s.onTrueStep,
               onFalseStep: s.onFalseStep,
               delaySeconds: s.delaySeconds,
+              redisCommand: s.redisCommand,
+              redisKey: s.redisKey,
+              redisField: s.redisField,
+              redisValue: s.redisValue,
+              redisTTL: s.redisTTL,
               inputMapping: s.inputMapping,
               outputVariable: s.outputVariable,
               onError: s.onError,
@@ -1377,6 +1387,33 @@ function FlowCanvas() {
                     </select>
                     <p className="text-xs text-slate-600 mt-1">Select a sender app to trigger this workflow externally.</p>
                   </div>
+
+                  {/* Webhook URL Display */}
+                  {webhookToken && (
+                    <div className="mt-4 text-left">
+                      <label className="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                        Webhook URL (no auth required)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          readOnly
+                          value={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/webhook/${webhookToken}?sync=true`}
+                          className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg text-xs text-slate-300 font-mono truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/webhook/${webhookToken}?sync=true`);
+                          }}
+                          className="px-3 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs rounded-lg transition-colors shrink-0"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-1">Use this URL to trigger workflow from Postman or external apps. Add <code className="text-cyan-600">&amp;timeout=60</code> to set custom timeout.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

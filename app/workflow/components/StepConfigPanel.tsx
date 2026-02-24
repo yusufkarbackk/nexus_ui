@@ -139,6 +139,19 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 rows={4}
                             />
                         </FieldGroup>
+
+                        <FieldGroup label="Dynamic Headers (JSON)">
+                            <textarea
+                                value={step.restHeadersTemplate || ''}
+                                onChange={(e) => updateField('restHeadersTemplate', e.target.value || undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none resize-y min-h-[60px]"
+                                placeholder={'{"Authorization": "Bearer {{access_token}}"}'}
+                                rows={3}
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                Use <code className="text-cyan-500">{'{{field}}'}</code> to inject values from input data into headers.
+                            </p>
+                        </FieldGroup>
                     </>
                 )}
 
@@ -320,6 +333,78 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                             max={3600}
                         />
                     </FieldGroup>
+                )}
+
+                {/* ── Redis Command Config ── */}
+                {step.stepType === 'redis_command' && (
+                    <>
+                        <FieldGroup label="Command">
+                            <select
+                                value={step.redisCommand || 'GET'}
+                                onChange={(e) => updateField('redisCommand', e.target.value)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-red-500 outline-none"
+                            >
+                                <option value="GET">GET — Read string</option>
+                                <option value="SET">SET — Write string</option>
+                                <option value="DEL">DEL — Delete key</option>
+                                <option value="HGET">HGET — Read hash field</option>
+                                <option value="HSET">HSET — Write hash field</option>
+                                <option value="HGETALL">HGETALL — Read all hash fields</option>
+                            </select>
+                        </FieldGroup>
+
+                        <FieldGroup label="Key">
+                            <input
+                                type="text"
+                                value={step.redisKey || ''}
+                                onChange={(e) => updateField('redisKey', e.target.value || undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none"
+                                placeholder="user:{{user_id}}:token"
+                            />
+                            <p className="text-xs text-slate-500 mt-1">
+                                Use <code className="text-red-400">{'{{field}}'}</code> for dynamic keys.
+                            </p>
+                        </FieldGroup>
+
+                        {/* Hash Field — shown for HGET / HSET */}
+                        {(step.redisCommand === 'HGET' || step.redisCommand === 'HSET') && (
+                            <FieldGroup label="Hash Field">
+                                <input
+                                    type="text"
+                                    value={step.redisField || ''}
+                                    onChange={(e) => updateField('redisField', e.target.value || undefined)}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none"
+                                    placeholder="access_token"
+                                />
+                            </FieldGroup>
+                        )}
+
+                        {/* Value — shown for SET / HSET */}
+                        {(step.redisCommand === 'SET' || step.redisCommand === 'HSET') && (
+                            <FieldGroup label="Value">
+                                <textarea
+                                    value={step.redisValue || ''}
+                                    onChange={(e) => updateField('redisValue', e.target.value || undefined)}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none resize-y min-h-[60px]"
+                                    placeholder="{{access_token}}"
+                                    rows={2}
+                                />
+                            </FieldGroup>
+                        )}
+
+                        {/* TTL — shown for SET */}
+                        {step.redisCommand === 'SET' && (
+                            <FieldGroup label="TTL (seconds, 0 = no expiry)">
+                                <input
+                                    type="number"
+                                    value={step.redisTTL ?? 0}
+                                    onChange={(e) => updateField('redisTTL', Number(e.target.value) || 0)}
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white outline-none"
+                                    min={0}
+                                />
+                            </FieldGroup>
+                        )}
+                    </>
                 )}
 
                 {/* ── Divider ── */}

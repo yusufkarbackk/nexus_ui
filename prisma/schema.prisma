@@ -550,6 +550,7 @@ enum workflow_steps_step_type {
   transform
   condition
   delay
+  redis_command
 }
 
 enum workflow_steps_on_error {
@@ -575,10 +576,11 @@ model workflow_steps {
   step_type   workflow_steps_step_type
 
   // REST call config
-  rest_destination_id BigInt? @db.UnsignedBigInt
-  rest_method         String? @db.VarChar(10)
-  rest_path           String? @db.VarChar(500)
-  rest_body_template  String? @db.Text
+  rest_destination_id   BigInt? @db.UnsignedBigInt
+  rest_method           String? @db.VarChar(10)
+  rest_path             String? @db.VarChar(500)
+  rest_body_template    String? @db.Text
+  rest_headers_template String? @db.Text
 
   // DB query config
   database_config_id BigInt?                       @db.UnsignedBigInt
@@ -602,6 +604,13 @@ model workflow_steps {
 
   // Delay config
   delay_seconds Int? @default(0)
+
+  // Redis command config
+  redis_command String? @db.VarChar(20)
+  redis_key     String? @db.VarChar(500)
+  redis_field   String? @db.VarChar(500)
+  redis_value   String? @db.Text
+  redis_ttl     Int?    @default(0)
 
   // Common config
   input_mapping   String?                 @db.Text
