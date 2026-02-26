@@ -17,9 +17,11 @@ import {
     fetchRestDestinations,
     fetchDestinations,
     fetchSapDestinations,
+    fetchRedisDestinations,
     type RestDestination,
     type Destination,
     type SapDestination,
+    type RedisDestination,
 } from '@/app/lib/api';
 import { STEP_TYPE_META } from './SequentialStepEditor';
 
@@ -38,6 +40,7 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
     const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
     const [dbDestinations, setDbDestinations] = useState<Destination[]>([]);
     const [sapDestinations, setSapDestinations] = useState<SapDestination[]>([]);
+    const [redisDestinations, setRedisDestinations] = useState<RedisDestination[]>([]);
 
     useEffect(() => {
         if (step.stepType === 'rest_call') {
@@ -48,6 +51,9 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
         }
         if (step.stepType === 'sap_query') {
             fetchSapDestinations().then(r => setSapDestinations(r.data || [])).catch(() => { });
+        }
+        if (step.stepType === 'redis_command') {
+            fetchRedisDestinations().then(r => setRedisDestinations(r.data || [])).catch(() => { });
         }
     }, [step.stepType]);
 
@@ -338,6 +344,19 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                 {/* ── Redis Command Config ── */}
                 {step.stepType === 'redis_command' && (
                     <>
+                        <FieldGroup label="Redis Destination">
+                            <select
+                                value={step.redisDestinationId || ''}
+                                onChange={(e) => updateField('redisDestinationId', e.target.value ? Number(e.target.value) : undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-red-500 outline-none"
+                            >
+                                <option value="">Select Redis destination...</option>
+                                {redisDestinations.map(d => (
+                                    <option key={d.id} value={d.id}>{d.name} — {d.host}:{d.port}</option>
+                                ))}
+                            </select>
+                        </FieldGroup>
+
                         <FieldGroup label="Command">
                             <select
                                 value={step.redisCommand || 'GET'}

@@ -181,6 +181,7 @@ function FlowCanvas() {
               onTrueStep: s.onTrueStep,
               onFalseStep: s.onFalseStep,
               delaySeconds: s.delaySeconds,
+              redisDestinationId: s.redisDestinationId,
               redisCommand: s.redisCommand,
               redisKey: s.redisKey,
               redisField: s.redisField,

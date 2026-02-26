@@ -504,6 +504,7 @@ export interface WorkflowStepPayload {
   // Delay config
   delaySeconds?: number;
   // Redis command config
+  redisDestinationId?: number;
   redisCommand?: string;
   redisKey?: string;
   redisField?: string;
@@ -551,6 +552,7 @@ export interface WorkflowStep {
   // Delay config
   delaySeconds?: number;
   // Redis command config
+  redisDestinationId?: number;
   redisCommand?: string;
   redisKey?: string;
   redisField?: string;
@@ -568,6 +570,7 @@ export interface WorkflowStep {
   restDestination?: RestDestination;
   destination?: Destination;
   sapDestination?: SapDestination;
+  redisDestination?: RedisDestination;
   createdAt: string;
   updatedAt: string;
 }
@@ -1288,6 +1291,128 @@ export async function fetchSapTables(destinationId: number, schemaName: string):
 export async function fetchSapColumns(destinationId: number, schemaName: string, tableName: string): Promise<{ success: boolean; columns: SapColumn[]; error?: string }> {
   const response = await authFetch(`/api/sap-destinations/${destinationId}/columns?schema=${encodeURIComponent(schemaName)}&table=${encodeURIComponent(tableName)}`, {
     method: 'GET',
+  });
+  return response.json();
+}
+
+// ============================================
+// Redis Destination API Functions
+// ============================================
+
+export type RedisDestinationStatus = 'up' | 'down';
+
+export interface RedisDestination {
+  id: number;
+  name: string;
+  description: string | null;
+  host: string;
+  port: number;
+  databaseNumber: number;
+  useTls: boolean;
+  status: RedisDestinationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RedisDestinationListResponse {
+  success: boolean;
+  message: string;
+  data: RedisDestination[];
+  total: number;
+}
+
+export interface CreateRedisDestinationPayload {
+  name: string;
+  description?: string;
+  host: string;
+  port?: number;
+  password?: string;
+  databaseNumber?: number;
+  useTls?: boolean;
+}
+
+export interface UpdateRedisDestinationPayload {
+  name?: string;
+  description?: string;
+  host?: string;
+  port?: number;
+  password?: string;
+  databaseNumber?: number;
+  useTls?: boolean;
+  status?: RedisDestinationStatus;
+}
+
+export interface TestRedisConnectionPayload {
+  host: string;
+  port?: number;
+  password?: string;
+  databaseNumber?: number;
+  useTls?: boolean;
+}
+
+// Fetch all Redis destinations
+export async function fetchRedisDestinations(): Promise<RedisDestinationListResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations`, {
+    method: 'GET',
+  });
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+// Fetch single Redis destination by ID
+export async function fetchRedisDestinationById(id: number): Promise<ApiResponse<RedisDestination>> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations/${id}`, {
+    method: 'GET',
+  });
+  if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+  return response.json();
+}
+
+// Create Redis destination
+export async function createRedisDestination(payload: CreateRedisDestinationPayload): Promise<ApiResponse<RedisDestination>> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Update Redis destination
+export async function updateRedisDestination(id: number, payload: UpdateRedisDestinationPayload): Promise<ApiResponse<RedisDestination>> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Delete Redis destination
+export async function deleteRedisDestination(id: number): Promise<ApiResponse<null>> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations/${id}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Test Redis connection
+export async function testRedisConnection(payload: TestRedisConnectionPayload): Promise<{ success: boolean; message: string; latency?: string }> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations/test`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+// Toggle Redis destination status
+export async function toggleRedisDestinationStatus(id: number): Promise<{ success: boolean; message: string; status: RedisDestinationStatus }> {
+  const response = await authFetch(`${API_BASE_URL}/api/redis-destinations/${id}/toggle`, {
+    method: 'POST',
   });
   return response.json();
 }

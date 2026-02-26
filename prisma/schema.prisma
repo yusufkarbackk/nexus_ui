@@ -606,11 +606,12 @@ model workflow_steps {
   delay_seconds Int? @default(0)
 
   // Redis command config
-  redis_command String? @db.VarChar(20)
-  redis_key     String? @db.VarChar(500)
-  redis_field   String? @db.VarChar(500)
-  redis_value   String? @db.Text
-  redis_ttl     Int?    @default(0)
+  redis_destination_id Int?
+  redis_command        String? @db.VarChar(20)
+  redis_key            String? @db.VarChar(500)
+  redis_field          String? @db.VarChar(500)
+  redis_value          String? @db.Text
+  redis_ttl            Int?    @default(0)
 
   // Common config
   input_mapping   String?                 @db.Text
@@ -627,6 +628,7 @@ model workflow_steps {
   rest_destinations   rest_destinations?    @relation(fields: [rest_destination_id], references: [id], onDelete: SetNull)
   database_configs    database_configs?     @relation(fields: [database_config_id], references: [id], onDelete: SetNull)
   sap_destinations    sap_destinations?     @relation(fields: [sap_destination_id], references: [id], onDelete: SetNull)
+  redis_destinations  redis_destinations?   @relation(fields: [redis_destination_id], references: [id], onDelete: SetNull)
   step_field_mappings step_field_mappings[]
 
   @@index([workflow_id], map: "workflow_steps_workflow_id_index")
@@ -649,4 +651,25 @@ model step_field_mappings {
   workflow_steps workflow_steps @relation(fields: [step_id], references: [id], onDelete: Cascade)
 
   @@index([step_id], map: "step_field_mappings_step_id_index")
+}
+
+enum redis_destinations_status {
+  up
+  down
+}
+
+model redis_destinations {
+  id              Int                       @id @default(autoincrement())
+  name            String                    @db.VarChar(255)
+  description     String?                   @db.Text
+  host            String                    @db.VarChar(255)
+  port            Int                       @default(6379)
+  password        String?                   @db.VarChar(500)
+  database_number Int                       @default(0)
+  use_tls         Boolean                   @default(false)
+  status          redis_destinations_status @default(up)
+  created_at      DateTime?                 @default(now()) @db.DateTime(0)
+  updated_at      DateTime?                 @default(now()) @db.DateTime(0)
+
+  workflow_steps workflow_steps[]
 }

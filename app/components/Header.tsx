@@ -71,6 +71,13 @@ export function Header() {
                             SAP
                         </Link>
                         <Link
+                            href="/redis-destinations/list"
+                            className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                            <Zap className="w-4 h-4" />
+                            Redis
+                        </Link>
+                        <Link
                             href="/workflow/list"
                             className="flex items-center gap-2 px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
                         >
