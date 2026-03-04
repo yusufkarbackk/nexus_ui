@@ -14,9 +14,10 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
+  FileJson,
 } from 'lucide-react';
 import Link from 'next/link';
-import { DataField } from '../types/senderAppTypes';
+import { DataField, DataFieldType } from '../types/senderAppTypes';
 import { generateAppId, generateFieldId } from '../utils/generateAppId';
 import { DataFieldRow } from './DataFieldRow';
 import { createApplication, updateApplication, fetchApplicationById, ApplicationFieldPayload } from '@/app/lib/api';
@@ -38,6 +39,8 @@ export function SenderAppForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showJsonImport, setShowJsonImport] = useState(false);
+  const [importJson, setImportJson] = useState('');
 
   // Load existing application data when in edit mode
   useEffect(() => {
@@ -110,6 +113,38 @@ export function SenderAppForm() {
   const removeDataField = useCallback((id: string) => {
     setDataFields((prev) => prev.filter((field) => field.id !== id));
   }, []);
+
+  const importJsonFields = useCallback(() => {
+    try {
+      const parsed = JSON.parse(importJson.trim());
+      if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+        setError('JSON must be an object like {"field_name": "Type"}');
+        return;
+      }
+      const validTypes = ['string', 'number', 'boolean', 'json'];
+      const newFields: DataField[] = [];
+      for (const [name, rawType] of Object.entries(parsed)) {
+        const type = String(rawType).toLowerCase() as DataFieldType;
+        if (!validTypes.includes(type)) {
+          setError(`Invalid type "${rawType}" for field "${name}". Use: String, Number, Boolean, JSON`);
+          return;
+        }
+        newFields.push({
+          id: generateFieldId(),
+          name,
+          type,
+          required: false,
+        });
+      }
+      setDataFields((prev) => [...prev, ...newFields]);
+      setImportJson('');
+      setShowJsonImport(false);
+      setSuccess(`Imported ${newFields.length} fields`);
+      setTimeout(() => setSuccess(null), 3000);
+    } catch {
+      setError('Invalid JSON format. Check your syntax.');
+    }
+  }, [importJson]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -381,15 +416,63 @@ export function SenderAppForm() {
                     Define the fields that this app will send (saved to database)
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={addDataField}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Field
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowJsonImport(!showJsonImport); setError(null); }}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors"
+                  >
+                    <FileJson className="w-4 h-4" />
+                    Import JSON
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addDataField}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Field
+                  </button>
+                </div>
               </div>
+
+              {/* JSON Import Panel */}
+              {showJsonImport && (
+                <div className="mb-4 p-4 bg-slate-800 border border-amber-500/20 rounded-lg">
+                  <p className="text-xs text-slate-400 mb-2">
+                    Paste JSON with format <code className="text-amber-400 bg-slate-900 px-1 rounded">{'"field_name": "Type"'}</code>
+                    &nbsp;&mdash; Types: <code className="text-emerald-400">String</code>, <code className="text-blue-400">Number</code>, <code className="text-purple-400">Boolean</code>, <code className="text-orange-400">JSON</code>
+                  </p>
+                  <textarea
+                    value={importJson}
+                    onChange={(e) => setImportJson(e.target.value)}
+                    rows={5}
+                    className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none focus:border-amber-500 resize-y"
+                    placeholder={'{\n  "customer_id": "String",\n  "amount": "Number",\n  "is_active": "Boolean",\n  "metadata": "JSON"\n}'}
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => { setShowJsonImport(false); setImportJson(''); }}
+                      className="px-3 py-1.5 text-xs text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={importJsonFields}
+                      disabled={!importJson.trim()}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-medium rounded-lg transition-colors ${importJson.trim()
+                          ? 'bg-amber-600 hover:bg-amber-500 text-white'
+                          : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                        }`}
+                    >
+                      <FileJson className="w-3.5 h-3.5" />
+                      Import Fields
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {dataFields.length === 0 ? (
                 <div className="text-center py-12 border-2 border-dashed border-slate-700 rounded-lg">

@@ -486,7 +486,7 @@ export interface FieldMappingPayload {
 
 export type DestinationType = 'database' | 'rest' | 'sap';
 export type WorkflowType = 'fan_out' | 'sequential';
-export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay' | 'redis_command';
+export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay' | 'redis_command' | 'ai_agent';
 export type StepErrorHandling = 'stop' | 'skip' | 'retry';
 
 // Sequential workflow step field mapping
@@ -557,6 +557,8 @@ export interface WorkflowStepPayload {
   timeoutSeconds: number;
   isActive: boolean;
   fieldMappings: StepFieldMappingPayload[];
+  // AI Agent Object reference
+  aiAgentId?: number;
 }
 
 // Sequential workflow step (from API response)
@@ -605,6 +607,8 @@ export interface WorkflowStep {
   timeoutSeconds: number;
   isActive: boolean;
   fieldMappings: StepFieldMapping[];
+  // AI Agent Object reference
+  aiAgentId?: number;
   // Expanded references
   restDestination?: RestDestination;
   destination?: Destination;
@@ -1460,4 +1464,262 @@ export async function toggleRedisDestinationStatus(id: number): Promise<{ succes
     method: 'POST',
   });
   return response.json();
+}
+
+// ============================================
+// AI Provider API Functions
+// ============================================
+
+export type AIProviderType = 'gemini' | 'openai' | 'mcp' | 'custom_api';
+export type AIProviderStatus = 'active' | 'inactive';
+
+export interface AIProvider {
+  id: number;
+  name: string;
+  description?: string;
+  providerType: AIProviderType;
+  baseUrl?: string;
+  defaultModel?: string;
+  timeoutSeconds: number;
+  maxTokens: number;
+  status: AIProviderStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AIProviderListResponse {
+  success: boolean;
+  message: string;
+  data: AIProvider[];
+  total: number;
+}
+
+export interface CreateAIProviderPayload {
+  name: string;
+  description?: string;
+  providerType: AIProviderType;
+  baseUrl?: string;
+  apiKey?: string;
+  defaultModel?: string;
+  timeoutSeconds?: number;
+  maxTokens?: number;
+}
+
+// Fetch all AI providers
+export async function fetchAIProviders(): Promise<AIProviderListResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers`);
+  return response.json();
+}
+
+// Create AI provider
+export async function createAIProvider(payload: CreateAIProviderPayload): Promise<ApiResponse<AIProvider>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Update AI provider
+export async function updateAIProvider(id: number, payload: Partial<CreateAIProviderPayload> & { status?: AIProviderStatus }): Promise<ApiResponse<AIProvider>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Delete AI provider
+export async function deleteAIProvider(id: number): Promise<ApiResponse<null>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers/${id}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Toggle AI provider status
+export async function toggleAIProviderStatus(id: number): Promise<ApiResponse<AIProvider>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers/${id}/toggle`, {
+    method: 'POST',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Test AI provider connection
+export async function testAIProviderConnection(payload: { providerType: string; baseUrl?: string; apiKey?: string; model?: string }): Promise<ApiResponse<null>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-providers/test`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  return response.json();
+}
+
+// ============================================
+// AI Agent API Functions
+// ============================================
+
+export interface AIAgentTool {
+  id: number;
+  agentId: number;
+  toolName: string;
+  toolDescription: string;
+  parametersSchema?: string;
+  toolType: string;
+  restDestinationId?: number;
+  restMethod?: string;
+  restPath?: string;
+  restBodyTemplate?: string;
+  restHeaders?: string;
+  databaseConfigId?: number;
+  dbQuery?: string;
+  redisDestinationId?: number;
+  redisCommand?: string;
+  redisKeyTemplate?: string;
+  workflowId?: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface AIAgent {
+  id: number;
+  name: string;
+  description?: string;
+  aiProviderId: number;
+  model?: string;
+  systemPrompt: string;
+  temperature: number;
+  maxTokens: number;
+  maxIterations: number;
+  memoryEnabled: boolean;
+  memoryType: string;
+  memoryTtl: number;
+  memoryMaxMessages: number;
+  outputType: string;
+  outputSchema?: string;
+  isActive: boolean;
+  providerName?: string;
+  tools?: AIAgentTool[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AIAgentListResponse {
+  success: boolean;
+  message: string;
+  data: AIAgent[];
+  total: number;
+}
+
+export interface AIAgentResponse {
+  success: boolean;
+  message: string;
+  data?: AIAgent;
+}
+
+export interface CreateAIAgentPayload {
+  name: string;
+  description?: string;
+  aiProviderId: number;
+  model?: string;
+  systemPrompt: string;
+  temperature?: number;
+  maxTokens?: number;
+  maxIterations?: number;
+  memoryEnabled?: boolean;
+  memoryType?: string;
+  memoryTtl?: number;
+  memoryMaxMessages?: number;
+  outputType?: string;
+  outputSchema?: string;
+}
+
+export interface CreateAIAgentToolPayload {
+  toolName: string;
+  toolDescription: string;
+  parametersSchema?: string;
+  toolType: string;
+  restDestinationId?: number;
+  restMethod?: string;
+  restPath?: string;
+  restBodyTemplate?: string;
+  restHeaders?: string;
+  databaseConfigId?: number;
+  dbQuery?: string;
+  redisDestinationId?: number;
+  redisCommand?: string;
+  redisKeyTemplate?: string;
+  workflowId?: number;
+}
+
+// Fetch all AI agents
+export async function fetchAIAgents(): Promise<AIAgentListResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents`);
+  return response.json();
+}
+
+// Fetch single AI agent by ID
+export async function fetchAIAgentById(id: number): Promise<AIAgentResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents/${id}`);
+  return response.json();
+}
+
+// Create AI agent
+export async function createAIAgent(payload: CreateAIAgentPayload): Promise<AIAgentResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Update AI agent
+export async function updateAIAgent(id: number, payload: Partial<CreateAIAgentPayload> & { isActive?: boolean }): Promise<AIAgentResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Delete AI agent
+export async function deleteAIAgent(id: number): Promise<AIAgentResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents/${id}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Add tool to AI agent
+export async function addAIAgentTool(agentId: number, payload: CreateAIAgentToolPayload): Promise<ApiResponse<AIAgentTool>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents/${agentId}/tools`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
+}
+
+// Delete tool from AI agent
+export async function deleteAIAgentTool(agentId: number, toolId: number): Promise<ApiResponse<null>> {
+  const response = await authFetch(`${API_BASE_URL}/api/ai-agents/${agentId}/tools/${toolId}`, {
+    method: 'DELETE',
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.message || `HTTP error! status: ${response.status}`);
+  return data;
 }

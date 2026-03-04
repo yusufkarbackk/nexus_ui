@@ -555,6 +555,7 @@ enum workflow_steps_step_type {
   condition
   delay
   redis_command
+  ai_agent
 }
 
 enum workflow_steps_on_error {
@@ -617,6 +618,23 @@ model workflow_steps {
   redis_value          String? @db.Text
   redis_ttl            Int?    @default(0)
 
+  // AI Agent config
+  ai_provider_id         BigInt?                          @db.UnsignedBigInt
+  ai_system_prompt       String?                          @db.Text
+  ai_prompt_template     String?                          @db.Text
+  ai_model               String?                          @db.VarChar(100)
+  ai_temperature         Float?                           @default(0.7)
+  ai_max_tokens          Int?                             @default(4096)
+  ai_output_type         workflow_steps_ai_output_type?   @default(text)
+  ai_output_format       workflow_steps_ai_output_format? @default(json)
+  ai_memory_enabled      Boolean                          @default(false)
+  ai_memory_type         workflow_steps_ai_memory_type?   @default(conversation)
+  ai_memory_ttl          Int?                             @default(3600)
+  ai_memory_max_messages Int?                             @default(50)
+
+  // Agent AI Object reference (standalone agent)
+  ai_agent_id BigInt? @db.UnsignedBigInt
+
   // Common config
   input_mapping   String?                 @db.Text
   output_variable String?                 @default("result") @db.VarChar(255)
@@ -633,6 +651,8 @@ model workflow_steps {
   database_configs    database_configs?     @relation(fields: [database_config_id], references: [id], onDelete: SetNull)
   sap_destinations    sap_destinations?     @relation(fields: [sap_destination_id], references: [id], onDelete: SetNull)
   redis_destinations  redis_destinations?   @relation(fields: [redis_destination_id], references: [id], onDelete: SetNull)
+  ai_providers        ai_providers?         @relation(fields: [ai_provider_id], references: [id], onDelete: SetNull)
+  ai_agents           ai_agents?            @relation(fields: [ai_agent_id], references: [id], onDelete: SetNull)
   step_field_mappings step_field_mappings[]
 
   @@index([workflow_id], map: "workflow_steps_workflow_id_index")
@@ -689,4 +709,154 @@ model rate_limit_config {
   limit_value Int             @default(0) // 0 = no limit
   limit_unit  rate_limit_unit @default(second)
   updated_at  DateTime        @updatedAt @db.Timestamp(0)
+}
+
+/// AI provider connection configuration (Gemini, OpenAI, MCP, Custom API)
+model ai_providers {
+  id                BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  name              String              @unique @db.VarChar(255)
+  description       String?             @db.Text
+  provider_type     ai_provider_type
+  base_url          String?             @db.VarChar(500)
+  api_key_encrypted String?             @db.VarChar(500)
+  default_model     String?             @db.VarChar(100)
+  timeout_seconds   Int                 @default(60)
+  max_tokens        Int                 @default(4096)
+  status            ai_providers_status @default(active)
+  created_at        DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at        DateTime?           @default(now()) @db.Timestamp(0)
+  workflow_steps    workflow_steps[]
+  ai_agents         ai_agents[]
+
+  @@index([status], map: "ai_providers_status_index")
+  @@index([provider_type], map: "ai_providers_type_index")
+}
+
+enum ai_provider_type {
+  gemini
+  openai
+  mcp
+  custom_api
+}
+
+enum ai_providers_status {
+  active
+  inactive
+}
+
+enum workflow_steps_ai_output_type {
+  text
+  image
+  video
+}
+
+enum workflow_steps_ai_output_format {
+  json
+  raw
+  markdown
+}
+
+enum workflow_steps_ai_memory_type {
+  conversation
+  buffer
+  summary
+}
+
+/// Standalone AI Agent object — reusable across workflows
+model ai_agents {
+  id          BigInt  @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String  @unique @db.VarChar(255)
+  description String? @db.Text
+
+  // LLM Config
+  ai_provider_id BigInt  @db.UnsignedBigInt
+  model          String? @db.VarChar(100)
+
+  // Agent Behavior
+  system_prompt  String @db.Text
+  temperature    Float  @default(0.7)
+  max_tokens     Int    @default(4096)
+  max_iterations Int    @default(10)
+
+  // Memory
+  memory_enabled      Boolean              @default(true)
+  memory_type         ai_agent_memory_type @default(redis)
+  memory_ttl          Int                  @default(3600)
+  memory_max_messages Int                  @default(50)
+
+  // Output
+  output_type   ai_agent_output_type @default(text)
+  output_schema String?              @db.Text
+
+  // Status
+  is_active  Boolean   @default(true)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+  updated_at DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  ai_providers   ai_providers     @relation(fields: [ai_provider_id], references: [id])
+  ai_agent_tools ai_agent_tools[]
+  workflow_steps workflow_steps[]
+
+  @@index([is_active], map: "ai_agents_active_index")
+}
+
+/// Tools available to an AI Agent
+model ai_agent_tools {
+  id       BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  agent_id BigInt @db.UnsignedBigInt
+
+  // Tool definition (visible to LLM)
+  tool_name         String  @db.VarChar(255)
+  tool_description  String  @db.Text
+  parameters_schema String? @db.Text
+
+  // Tool implementation type
+  tool_type ai_agent_tool_type
+
+  // REST tool config
+  rest_destination_id BigInt? @db.UnsignedBigInt
+  rest_method         String? @db.VarChar(10)
+  rest_path           String? @db.VarChar(500)
+  rest_body_template  String? @db.Text
+  rest_headers        String? @db.Text
+
+  // DB tool config
+  database_config_id BigInt? @db.UnsignedBigInt
+  db_query           String? @db.Text
+
+  // Redis tool config
+  redis_destination_id Int?
+  redis_command        String? @db.VarChar(20)
+  redis_key_template   String? @db.VarChar(500)
+
+  // Workflow tool config
+  workflow_id BigInt? @db.UnsignedBigInt
+
+  is_active  Boolean   @default(true)
+  created_at DateTime? @default(now()) @db.Timestamp(0)
+
+  // Relations
+  ai_agents ai_agents @relation(fields: [agent_id], references: [id], onDelete: Cascade)
+
+  @@index([agent_id], map: "ai_agent_tools_agent_id_index")
+}
+
+enum ai_agent_tool_type {
+  rest_call
+  db_query
+  redis_command
+  workflow
+}
+
+enum ai_agent_memory_type {
+  redis
+  simple
+}
+
+enum ai_agent_output_type {
+  text
+  json
+  image
+  video
 }

@@ -14,6 +14,7 @@ import {
     Settings2,
     Power,
     PowerOff,
+    Bot,
 } from 'lucide-react';
 import type { StepType, StepErrorHandling } from '../types/workflowTypes';
 import type { WorkflowStepPayload, StepFieldMappingPayload } from '@/app/lib/api';
@@ -27,6 +28,7 @@ export const STEP_TYPE_META: Record<StepType, { label: string; icon: React.Eleme
     condition: { label: 'Condition', icon: GitBranch, color: 'text-amber-400', bgColor: 'bg-amber-900/30', borderColor: 'border-amber-500/50', description: 'Conditional branching' },
     delay: { label: 'Delay', icon: Clock, color: 'text-sky-400', bgColor: 'bg-sky-900/30', borderColor: 'border-sky-500/50', description: 'Wait for a duration' },
     redis_command: { label: 'Redis', icon: Database, color: 'text-red-400', bgColor: 'bg-red-900/30', borderColor: 'border-red-500/50', description: 'Read/write Redis data' },
+    ai_agent: { label: 'AI Agent', icon: Bot, color: 'text-violet-400', bgColor: 'bg-violet-900/30', borderColor: 'border-violet-500/50', description: 'Run AI Agent with tools' },
 };
 
 // ─── Default step factory ─────────────────────────────────────────

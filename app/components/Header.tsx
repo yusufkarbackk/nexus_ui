@@ -21,6 +21,8 @@ import {
     Shield,
     Menu,
     X,
+    Bot,
+    Key,
 } from 'lucide-react';
 
 const NAV_LINKS = [
@@ -34,6 +36,8 @@ const NAV_LINKS = [
     { href: '/logs', icon: ScrollText, label: 'Logs' },
     { href: '/docs', icon: BookOpen, label: 'Docs' },
     { href: '/agents', icon: Cpu, label: 'Agent' },
+    { href: '/ai-providers', icon: Key, label: 'AI Providers' },
+    { href: '/agent', icon: Bot, label: 'AI Agents' },
     { href: '/settings/rate-limit', icon: Shield, label: 'Settings' },
 ];
 

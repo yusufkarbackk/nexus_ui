@@ -18,10 +18,12 @@ import {
     fetchDestinations,
     fetchSapDestinations,
     fetchRedisDestinations,
+    fetchAIAgents,
     type RestDestination,
     type Destination,
     type SapDestination,
     type RedisDestination,
+    type AIAgent,
 } from '@/app/lib/api';
 import { STEP_TYPE_META } from './SequentialStepEditor';
 
@@ -41,6 +43,7 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
     const [dbDestinations, setDbDestinations] = useState<Destination[]>([]);
     const [sapDestinations, setSapDestinations] = useState<SapDestination[]>([]);
     const [redisDestinations, setRedisDestinations] = useState<RedisDestination[]>([]);
+    const [aiAgents, setAIAgents] = useState<AIAgent[]>([]);
 
     useEffect(() => {
         if (step.stepType === 'rest_call') {
@@ -54,6 +57,9 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
         }
         if (step.stepType === 'redis_command') {
             fetchRedisDestinations().then(r => setRedisDestinations(r.data || [])).catch(() => { });
+        }
+        if (step.stepType === 'ai_agent') {
+            fetchAIAgents().then(r => setAIAgents(r.data || [])).catch(() => { });
         }
     }, [step.stepType]);
 
@@ -125,13 +131,13 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 </select>
                             </FieldGroup>
 
-                            <FieldGroup label="Path Override">
+                            <FieldGroup label="Path">
                                 <input
                                     type="text"
                                     value={step.restPath || ''}
                                     onChange={(e) => updateField('restPath', e.target.value || undefined)}
-                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 outline-none"
-                                    placeholder="/path"
+                                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 outline-none font-mono"
+                                    placeholder="/v2/{{input.path.project_id}}/resources"
                                 />
                             </FieldGroup>
                         </div>
@@ -141,7 +147,7 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 value={step.restBodyTemplate || ''}
                                 onChange={(e) => updateField('restBodyTemplate', e.target.value || undefined)}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none resize-y min-h-[80px]"
-                                placeholder={'{"key": "{{input.field}}"}'}
+                                placeholder={'{"name": "{{input.data.Name}}", "code": "{{input.data.Code}}"}'}
                                 rows={4}
                             />
                         </FieldGroup>
@@ -151,13 +157,21 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 value={step.restHeadersTemplate || ''}
                                 onChange={(e) => updateField('restHeadersTemplate', e.target.value || undefined)}
                                 className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white font-mono placeholder-slate-500 outline-none resize-y min-h-[60px]"
-                                placeholder={'{"Authorization": "Bearer {{access_token}}"}'}
+                                placeholder={'{"Authorization": "Bearer {{last_result.access_token}}"}'}
                                 rows={3}
                             />
-                            <p className="text-xs text-slate-500 mt-1">
-                                Use <code className="text-cyan-500">{'{{field}}'}</code> to inject values from input data into headers.
-                            </p>
                         </FieldGroup>
+
+                        {/* Template Variable Reference */}
+                        <div className="p-3 bg-cyan-900/15 border border-cyan-500/20 rounded-lg">
+                            <p className="text-[11px] text-cyan-400 font-medium mb-1.5">Template Variables</p>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-slate-400 font-mono">
+                                <span><code className="text-cyan-500">{'{{input.data.xxx}}'}</code> sender data</span>
+                                <span><code className="text-cyan-500">{'{{input.path.xxx}}'}</code> URL params</span>
+                                <span><code className="text-cyan-500">{'{{last_result.xxx}}'}</code> prev step</span>
+                                <span><code className="text-cyan-500">{'{{result.xxx}}'}</code> step output</span>
+                            </div>
+                        </div>
                     </>
                 )}
 
@@ -423,6 +437,49 @@ export function StepConfigPanel({ step, stepIndex, onUpdate, onClose }: StepConf
                                 />
                             </FieldGroup>
                         )}
+                    </>
+                )}
+
+                {/* ── AI Agent Config ── */}
+                {step.stepType === 'ai_agent' && (
+                    <>
+                        <FieldGroup label="AI Agent">
+                            <select
+                                value={step.aiAgentId || ''}
+                                onChange={(e) => updateField('aiAgentId', e.target.value ? Number(e.target.value) : undefined)}
+                                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white focus:border-violet-500 outline-none"
+                            >
+                                <option value="">Select AI Agent...</option>
+                                {aiAgents.map(a => (
+                                    <option key={a.id} value={a.id}>
+                                        {a.name} {a.providerName ? `— ${a.providerName}` : ''}
+                                    </option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Select a pre-configured AI Agent object with tools and memory.
+                            </p>
+                        </FieldGroup>
+
+                        {step.aiAgentId && (() => {
+                            const selected = aiAgents.find(a => a.id === step.aiAgentId);
+                            if (!selected) return null;
+                            return (
+                                <div className="p-3 bg-violet-900/20 border border-violet-500/30 rounded-lg space-y-1">
+                                    <p className="text-sm text-violet-300 font-medium">{selected.name}</p>
+                                    {selected.description && <p className="text-xs text-slate-400">{selected.description}</p>}
+                                    <div className="flex gap-4 text-xs text-slate-500 mt-2">
+                                        <span>Provider: <span className="text-white/70">{selected.providerName || 'N/A'}</span></span>
+                                        <span>Model: <span className="text-white/70">{selected.model || 'default'}</span></span>
+                                    </div>
+                                    <div className="flex gap-4 text-xs text-slate-500">
+                                        <span>Max iter: <span className="text-white/70">{selected.maxIterations}</span></span>
+                                        <span>Memory: <span className="text-white/70">{selected.memoryEnabled ? 'On' : 'Off'}</span></span>
+                                        <span>Tools: <span className="text-white/70">{selected.tools?.length ?? 0}</span></span>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </>
                 )}
 
