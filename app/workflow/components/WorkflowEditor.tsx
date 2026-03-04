@@ -89,6 +89,8 @@ function FlowCanvas() {
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [retentionHours, setRetentionHours] = useState(168); // Default 7 days
   const [deleteFailedImmediately, setDeleteFailedImmediately] = useState(false);
+  const [rateLimitValue, setRateLimitValue] = useState(0);
+  const [rateLimitUnit, setRateLimitUnit] = useState<'second' | 'minute'>('second');
   const [pipelineConfigs, setPipelineConfigs] = useState<Map<string, PipelineConfig>>(new Map());
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -153,6 +155,8 @@ function FlowCanvas() {
           setRetentionHours(workflow.redisRetentionHours || 168);
           setDeleteFailedImmediately(workflow.deleteFailedImmediately || false);
           setWorkflowType(workflow.workflowType || 'fan_out');
+          setRateLimitValue(workflow.rateLimitValue ?? 0);
+          setRateLimitUnit((workflow.rateLimitUnit as 'second' | 'minute') ?? 'second');
           if (workflow.webhookToken) {
             setWebhookToken(workflow.webhookToken);
           }
@@ -1020,6 +1024,8 @@ function FlowCanvas() {
           redisRetentionHours: retentionHours,
           deleteFailedImmediately: deleteFailedImmediately,
           workflowType: 'sequential' as const,
+          rateLimitValue,
+          rateLimitUnit,
           steps: sequentialSteps,
           pipelines: triggerAppId ? [{
             sourceType: 'sender_app' as const,
@@ -1137,6 +1143,8 @@ function FlowCanvas() {
           redisRetentionHours: retentionHours,
           deleteFailedImmediately: deleteFailedImmediately,
           workflowType: 'fan_out',
+          rateLimitValue,
+          rateLimitUnit,
           pipelines,
         });
 
@@ -1155,6 +1163,8 @@ function FlowCanvas() {
           redisRetentionHours: retentionHours,
           deleteFailedImmediately: deleteFailedImmediately,
           workflowType: 'fan_out',
+          rateLimitValue,
+          rateLimitUnit,
           pipelines,
         });
 
@@ -1255,6 +1265,26 @@ function FlowCanvas() {
               <span className="text-[11px] text-slate-400">min</span>
             </div>
           )}
+          <div className="w-px h-5 bg-slate-600 flex-shrink-0" />
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[11px] text-slate-400">Rate limit:</span>
+            <input
+              type="number"
+              min={0}
+              value={rateLimitValue}
+              onChange={(e) => setRateLimitValue(Math.max(0, parseInt(e.target.value) || 0))}
+              className="w-14 px-1.5 py-0.5 bg-slate-700 text-white text-xs rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
+              title="Max requests (0 = no limit)"
+            />
+            <select
+              value={rateLimitUnit}
+              onChange={(e) => setRateLimitUnit(e.target.value as 'second' | 'minute')}
+              className="px-1 py-0.5 bg-slate-700 text-white text-xs rounded border border-slate-600 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="second">/sec</option>
+              <option value="minute">/min</option>
+            </select>
+          </div>
         </div>
 
         {/* Center: Mode Toggle */}

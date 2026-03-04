@@ -47,6 +47,8 @@ model applications {
   encryption_enabled              Boolean                           @default(false)
   master_secret_encrypted         String?                           @db.VarChar(500)
   secret_version                  Int                               @default(1)
+  rate_limit_value                Int                               @default(0) // 0 = no limit
+  rate_limit_unit                 rate_limit_unit                   @default(second)
   agent_apps                      agent_apps[]
   application_fields              application_fields[]
   application_table_subscriptions application_table_subscriptions[]
@@ -273,6 +275,8 @@ model workflows {
   delete_failed_immediately Boolean              @default(false)
   workflow_type             workflows_type       @default(fan_out)
   webhook_token             String?              @unique @db.VarChar(64)
+  rate_limit_value          Int                  @default(0)
+  rate_limit_unit           rate_limit_unit      @default(second)
   logs                      logs[]
   mqtt_subscriptions        mqtt_subscriptions[]
   pipelines                 pipelines[]
@@ -672,4 +676,17 @@ model redis_destinations {
   updated_at      DateTime?                 @default(now()) @db.DateTime(0)
 
   workflow_steps workflow_steps[]
+}
+
+enum rate_limit_unit {
+  second
+  minute
+}
+
+/// Global rate limit configuration (singleton, id is always 1)
+model rate_limit_config {
+  id          Int             @id @default(1)
+  limit_value Int             @default(0) // 0 = no limit
+  limit_unit  rate_limit_unit @default(second)
+  updated_at  DateTime        @updatedAt @db.Timestamp(0)
 }

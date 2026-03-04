@@ -67,6 +67,8 @@ export interface Application {
   encryptionEnabled?: boolean;
   secretVersion?: number;
   masterSecret?: string; // Only returned on create
+  rateLimitValue: number;  // 0 = no limit
+  rateLimitUnit: 'second' | 'minute';
   fields: ApplicationField[];
   createdAt: string;
   updatedAt: string;
@@ -84,12 +86,16 @@ export interface CreateApplicationPayload {
   description?: string;
   appKey: string;
   encryptionEnabled?: boolean;
+  rateLimitValue?: number;
+  rateLimitUnit?: 'second' | 'minute';
   fields?: ApplicationFieldPayload[];
 }
 
 export interface UpdateApplicationPayload {
   name?: string;
   description?: string;
+  rateLimitValue?: number;
+  rateLimitUnit?: 'second' | 'minute';
   fields?: ApplicationFieldPayload[];
 }
 
@@ -194,8 +200,41 @@ export async function validateAppKey(appKey: string): Promise<{ success: boolean
 }
 
 // ============================================
-// Destination API Functions
+// Rate Limit API Functions
 // ============================================
+
+export interface GlobalRateLimitConfig {
+  id: number;
+  limitValue: number;        // 0 = no limit
+  limitUnit: 'second' | 'minute';
+  updatedAt: string;
+}
+
+export interface GlobalRateLimitResponse {
+  success: boolean;
+  message: string;
+  data?: GlobalRateLimitConfig;
+}
+
+// Fetch global rate limit config
+export async function fetchGlobalRateLimit(): Promise<GlobalRateLimitResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/rate-limit`, {
+    method: 'GET',
+  });
+  return response.json();
+}
+
+// Update global rate limit config
+export async function updateGlobalRateLimit(
+  limitValue: number,
+  limitUnit: 'second' | 'minute'
+): Promise<GlobalRateLimitResponse> {
+  const response = await authFetch(`${API_BASE_URL}/api/rate-limit`, {
+    method: 'PUT',
+    body: JSON.stringify({ limitValue, limitUnit }),
+  });
+  return response.json();
+}
 
 export type ConnectionType = 'mysql' | 'postgresql';
 export type DestinationStatus = 'up' | 'down';
@@ -606,6 +645,8 @@ export interface CreateWorkflowPayload {
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
   workflowType?: WorkflowType;
+  rateLimitValue?: number;
+  rateLimitUnit?: 'second' | 'minute';
   pipelines?: PipelinePayload[];       // For fan_out workflows
   steps?: WorkflowStepPayload[];       // For sequential workflows
 }
@@ -617,6 +658,8 @@ export interface UpdateWorkflowPayload {
   redisRetentionHours?: number;
   deleteFailedImmediately?: boolean;
   workflowType?: WorkflowType;
+  rateLimitValue?: number;
+  rateLimitUnit?: 'second' | 'minute';
   pipelines?: PipelinePayload[];       // For fan_out workflows
   steps?: WorkflowStepPayload[];       // For sequential workflows
 }
@@ -686,6 +729,8 @@ export interface Workflow {
   deleteFailedImmediately?: boolean;
   workflowType?: WorkflowType;
   webhookToken?: string;
+  rateLimitValue: number;  // 0 = no limit
+  rateLimitUnit: 'second' | 'minute';
   pipelines: Pipeline[];
   steps?: WorkflowStep[];
   createdAt: string;

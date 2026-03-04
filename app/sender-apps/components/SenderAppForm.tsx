@@ -31,6 +31,8 @@ export function SenderAppForm() {
   const [appDescription, setAppDescription] = useState('');
   const [appId, setAppId] = useState(() => generateAppId());
   const [dataFields, setDataFields] = useState<DataField[]>([]);
+  const [rateLimitValue, setRateLimitValue] = useState(0);
+  const [rateLimitUnit, setRateLimitUnit] = useState<'second' | 'minute'>('second');
   const [copied, setCopied] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,6 +54,8 @@ export function SenderAppForm() {
           setAppName(app.name);
           setAppDescription(app.description || '');
           setAppId(app.appKey);
+          setRateLimitValue(app.rateLimitValue ?? 0);
+          setRateLimitUnit((app.rateLimitUnit as 'second' | 'minute') ?? 'second');
 
           // Convert fields to DataField format
           if (app.fields && app.fields.length > 0) {
@@ -130,6 +134,8 @@ export function SenderAppForm() {
         response = await updateApplication(parseInt(editId), {
           name: appName,
           description: appDescription || undefined,
+          rateLimitValue,
+          rateLimitUnit,
           fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
         });
 
@@ -148,6 +154,8 @@ export function SenderAppForm() {
           description: appDescription || undefined,
           appKey: appId,
           encryptionEnabled: true,
+          rateLimitValue,
+          rateLimitUnit,
           fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
         });
 
@@ -292,6 +300,43 @@ export function SenderAppForm() {
                   </div>
                 </div>
               </div>
+            </section>
+
+            {/* Rate Limit Section */}
+            <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+              <h2 className="text-lg font-semibold text-white mb-1">Rate Limit</h2>
+              <p className="text-sm text-slate-400 mb-5">
+                Limit how many requests per time window this app can send to Nexus. Set to <code className="text-emerald-400 bg-slate-800 px-1 rounded">0</code> to disable.
+              </p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Max Requests</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={rateLimitValue}
+                    onChange={(e) => setRateLimitValue(Math.max(0, parseInt(e.target.value) || 0))}
+                    placeholder="0 = no limit"
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="w-48">
+                  <label className="block text-sm font-medium text-slate-300 mb-2">Per</label>
+                  <select
+                    value={rateLimitUnit}
+                    onChange={(e) => setRateLimitUnit(e.target.value as 'second' | 'minute')}
+                    className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  >
+                    <option value="second">Per Second</option>
+                    <option value="minute">Per Minute</option>
+                  </select>
+                </div>
+              </div>
+              {rateLimitValue > 0 && (
+                <p className="mt-3 text-xs text-amber-400">
+                  ⚠ App will return HTTP 429 after {rateLimitValue} requests/{rateLimitUnit}
+                </p>
+              )}
             </section>
 
             {/* Basic Info Section */}
