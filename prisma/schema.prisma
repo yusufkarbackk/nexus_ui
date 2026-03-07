@@ -183,32 +183,35 @@ model personal_access_tokens {
 
 /// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
 model pipelines {
-  id                   BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
-  workflow_id          BigInt                     @db.UnsignedBigInt
-  application_id       BigInt?                    @db.UnsignedBigInt
-  database_configs_id  BigInt?                    @db.UnsignedBigInt
-  target_table         String?                    @db.VarChar(255)
-  destination_type     pipelines_destination_type @default(database)
-  rest_destination_id  BigInt?                    @db.UnsignedBigInt
-  is_active            Boolean                    @default(true)
-  created_at           DateTime?                  @db.Timestamp(0)
-  updated_at           DateTime?                  @db.Timestamp(0)
-  mqtt_source_id       BigInt?                    @db.UnsignedBigInt
-  source_type          pipelines_source_type      @default(sender_app)
-  sap_destination_id   BigInt?                    @db.UnsignedBigInt
-  db_query_type        pipelines_db_query_type    @default(insert)
-  db_primary_key       String?                    @db.VarChar(255)
-  field_mappings       field_mappings[]
-  mqtt_sources         mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
-  rest_destinations    rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
-  sap_destinations     sap_destinations?          @relation(fields: [sap_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_sap_destination")
-  applications         applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
-  database_configs     database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
-  workflows            workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
-  sap_pipeline_configs sap_pipeline_configs[]
+  id                     BigInt                     @id @default(autoincrement()) @db.UnsignedBigInt
+  workflow_id            BigInt                     @db.UnsignedBigInt
+  application_id         BigInt?                    @db.UnsignedBigInt
+  database_configs_id    BigInt?                    @db.UnsignedBigInt
+  target_table           String?                    @db.VarChar(255)
+  destination_type       pipelines_destination_type @default(database)
+  rest_destination_id    BigInt?                    @db.UnsignedBigInt
+  is_active              Boolean                    @default(true)
+  created_at             DateTime?                  @db.Timestamp(0)
+  updated_at             DateTime?                  @db.Timestamp(0)
+  mqtt_source_id         BigInt?                    @db.UnsignedBigInt
+  source_type            pipelines_source_type      @default(sender_app)
+  sap_destination_id     BigInt?                    @db.UnsignedBigInt
+  db_query_type          pipelines_db_query_type    @default(insert)
+  db_primary_key         String?                    @db.VarChar(255)
+  sequential_workflow_id BigInt?                    @db.UnsignedBigInt
+  field_mappings         field_mappings[]
+  mqtt_sources           mqtt_sources?              @relation(fields: [mqtt_source_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_mqtt_source")
+  rest_destinations      rest_destinations?         @relation(fields: [rest_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_rest_destination")
+  sap_destinations       sap_destinations?          @relation(fields: [sap_destination_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_sap_destination")
+  applications           applications?              @relation(fields: [application_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_application_id_foreign")
+  database_configs       database_configs?          @relation(fields: [database_configs_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_database_configs_id_foreign")
+  workflows              workflows                  @relation(fields: [workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "pipelines_workflow_id_foreign")
+  sap_pipeline_configs   sap_pipeline_configs[]
+  sequential_workflow    workflows?                 @relation("SequentialTarget", fields: [sequential_workflow_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_pipelines_sequential_workflow")
 
   @@index([rest_destination_id], map: "fk_pipelines_rest_destination")
   @@index([sap_destination_id], map: "fk_pipelines_sap_destination")
+  @@index([sequential_workflow_id], map: "fk_pipelines_sequential_workflow")
   @@index([application_id], map: "pipelines_application_id_foreign")
   @@index([mqtt_source_id], map: "fk_pipelines_mqtt_source")
   @@index([database_configs_id], map: "pipelines_database_configs_id_foreign")
@@ -230,6 +233,8 @@ model rest_destinations {
   created_at      DateTime?                   @db.Timestamp(0)
   updated_at      DateTime?                   @db.Timestamp(0)
   body_fields     Json?
+  body_template   String?                     @db.Text
+  skip_tls_verify Boolean                     @default(false)
   pipelines       pipelines[]
   workflow_steps  workflow_steps[]
 
@@ -280,6 +285,7 @@ model workflows {
   logs                      logs[]
   mqtt_subscriptions        mqtt_subscriptions[]
   pipelines                 pipelines[]
+  targeted_by_pipelines     pipelines[]          @relation("SequentialTarget")
   workflow_steps            workflow_steps[]
 }
 
@@ -479,6 +485,7 @@ enum pipelines_destination_type {
   database
   rest
   sap
+  sequential
 }
 
 enum rest_destinations_auth_type {

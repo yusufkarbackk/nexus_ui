@@ -484,7 +484,7 @@ export interface FieldMappingPayload {
   destinationColumn: string;
 }
 
-export type DestinationType = 'database' | 'rest' | 'sap';
+export type DestinationType = 'database' | 'rest' | 'sap' | 'sequential';
 export type WorkflowType = 'fan_out' | 'sequential';
 export type StepType = 'rest_call' | 'db_query' | 'sap_query' | 'transform' | 'condition' | 'delay' | 'redis_command' | 'ai_agent';
 export type StepErrorHandling = 'stop' | 'skip' | 'retry';
@@ -638,6 +638,8 @@ export interface PipelinePayload {
   sapQueryType?: string;
   sapTargetSchema?: string;
   sapPrimaryKey?: string;
+  // For sequential workflow destinations
+  sequentialWorkflowId?: number;
   isActive: boolean;
   fieldMappings: FieldMappingPayload[];
 }
@@ -716,6 +718,9 @@ export interface Pipeline {
   sapDestinationId?: number;
   sapDestination?: SapDestination;
   sapPipelineConfig?: SapPipelineConfig;
+  // For sequential workflow destinations
+  sequentialWorkflowId?: number;
+  sequentialWorkflow?: { id: number; name: string; description?: string; isActive: boolean };
   isActive: boolean;
   fieldMappings: FieldMapping[];
   application?: Application;
@@ -901,8 +906,10 @@ export interface RestDestination {
   method: HTTPMethod;
   headers: string | null;  // JSON string
   bodyFields: RestDestinationBodyField[] | null;
+  bodyTemplate: string | null;  // JSON template for nested body structure
   authType: AuthType;
   timeoutSeconds: number;
+  skipTlsVerify: boolean;
   status: 'up' | 'down';
   createdAt: string;
   updatedAt: string;
@@ -922,9 +929,11 @@ export interface CreateRestDestinationPayload {
   method: HTTPMethod;
   headers?: string;
   bodyFields?: RestDestinationBodyField[];
+  bodyTemplate?: string;
   authType: AuthType;
   authConfig?: string;  // JSON string with auth details
   timeoutSeconds?: number;
+  skipTlsVerify?: boolean;
 }
 
 export interface UpdateRestDestinationPayload {
@@ -934,9 +943,11 @@ export interface UpdateRestDestinationPayload {
   method?: HTTPMethod;
   headers?: string;
   bodyFields?: RestDestinationBodyField[];
+  bodyTemplate?: string;
   authType?: AuthType;
   authConfig?: string;
   timeoutSeconds?: number;
+  skipTlsVerify?: boolean;
   status?: 'up' | 'down';
 }
 
@@ -947,6 +958,7 @@ export interface TestRestConnectionPayload {
   authType: AuthType;
   authConfig?: string;
   timeoutSeconds?: number;
+  skipTlsVerify?: boolean;
   testPayload?: string;
 }
 

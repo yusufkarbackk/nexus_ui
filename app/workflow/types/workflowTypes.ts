@@ -2,7 +2,7 @@ import { Node, Edge } from '@xyflow/react';
 import { Application, Destination, RestDestination, SapDestination, WorkflowStep, WorkflowStepPayload } from '@/app/lib/api';
 export type { WorkflowType, StepType, StepErrorHandling, WorkflowStep, WorkflowStepPayload, StepFieldMapping, StepFieldMappingPayload } from '@/app/lib/api';
 
-export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination' | 'sapDestination' | 'sequentialStep';
+export type NodeCategory = 'trigger' | 'action' | 'logic' | 'senderApp' | 'mqttSource' | 'destination' | 'restDestination' | 'sapDestination' | 'sequentialStep' | 'sequentialWorkflow';
 
 // Base custom node data
 export interface CustomNodeData {
@@ -51,6 +51,15 @@ export interface SapDestinationNodeData extends CustomNodeData {
   sapDestination: SapDestination;
 }
 
+// Sequential Workflow specific node data (used as fan-out destination)
+export interface SequentialWorkflowNodeData extends CustomNodeData {
+  category: 'sequentialWorkflow';
+  sequentialWorkflowId: number;
+  sequentialWorkflowName: string;
+  sequentialWorkflowDescription?: string;
+  sequentialWorkflowIsActive: boolean;
+}
+
 // MQTT Source type
 export interface MQTTSource {
   id: number;
@@ -75,7 +84,7 @@ export interface PipelineConfig {
   sourceType: 'sender_app' | 'mqtt_source';
   applicationId?: number; // For sender app sources
   mqttSourceId?: number;  // For MQTT sources
-  destinationType: 'database' | 'rest' | 'sap';
+  destinationType: 'database' | 'rest' | 'sap' | 'sequential';
   // For database destinations
   destinationId?: number;
   targetTable?: string;
@@ -89,6 +98,8 @@ export interface PipelineConfig {
   sapQuery?: string;
   sapQueryType?: string;
   sapPrimaryKey?: string;  // Primary key column for UPDATE/DELETE WHERE clause
+  // For sequential workflow destinations
+  sequentialWorkflowId?: number;
   fieldMappings: FieldMappingConfig[];
 }
 
@@ -127,7 +138,7 @@ export interface FieldMappingRequest {
   nullHandling?: string;
 }
 
-export type DestinationType = 'database' | 'rest' | 'sap';
+export type DestinationType = 'database' | 'rest' | 'sap' | 'sequential';
 
 export interface PipelineRequest {
   sourceType: 'sender_app' | 'mqtt_source';
@@ -193,11 +204,12 @@ export interface Pipeline {
   applicationId: number;
   mqttSourceId?: number;
   // Destination info
-  destinationType?: 'database' | 'rest' | 'sap';
+  destinationType?: 'database' | 'rest' | 'sap' | 'sequential';
   destinationId: number;
   targetTable: string;
   restDestinationId?: number;
   sapDestinationId?: number;
+  sequentialWorkflowId?: number;
   isActive: boolean;
   fieldMappings: FieldMapping[];
   // Expanded references
@@ -207,6 +219,7 @@ export interface Pipeline {
   restDestination?: RestDestination;
   sapDestination?: SapDestination;
   sapPipelineConfig?: SapPipelineConfig;
+  sequentialWorkflow?: { id: number; name: string; description?: string; isActive: boolean };
   createdAt: string;
   updatedAt: string;
 }
@@ -233,8 +246,9 @@ export type RestDestinationNodeType = Node<RestDestinationNodeData, 'restDestina
 export type MQTTSourceNodeType = Node<MQTTSourceNodeData, 'mqttSource'>;
 
 export type SapDestinationNodeType = Node<SapDestinationNodeData, 'sapDestination'>;
+export type SequentialWorkflowNodeType = Node<SequentialWorkflowNodeData, 'sequentialWorkflow'>;
 
-export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType | SapDestinationNodeType;
+export type WorkflowNode = TriggerNodeType | ActionNodeType | LogicNodeType | SenderAppNodeType | DestinationNodeType | RestDestinationNodeType | MQTTSourceNodeType | SapDestinationNodeType | SequentialWorkflowNodeType;
 export type WorkflowEdge = Edge<{ pipelineConfig?: PipelineConfig; edgeOffset?: number }>;
 
 export interface DraggableNodeItem {
@@ -257,6 +271,11 @@ export interface DraggableNodeItem {
   // For SAP destinations
   sapDestinationId?: number;
   sapDestination?: SapDestination;
+  // For sequential workflows (as destination)
+  sequentialWorkflowId?: number;
+  sequentialWorkflowName?: string;
+  sequentialWorkflowDescription?: string;
+  sequentialWorkflowIsActive?: boolean;
 }
 
 export const nodeCategories: Record<NodeCategory, { color: string; bgColor: string; borderColor: string }> = {
@@ -304,6 +323,11 @@ export const nodeCategories: Record<NodeCategory, { color: string; bgColor: stri
     color: 'text-cyan-600',
     bgColor: 'bg-cyan-50',
     borderColor: 'border-cyan-400',
+  },
+  sequentialWorkflow: {
+    color: 'text-purple-600',
+    bgColor: 'bg-purple-50',
+    borderColor: 'border-purple-400',
   },
 };
 

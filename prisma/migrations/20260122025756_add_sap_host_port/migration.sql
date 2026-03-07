@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE `sap_destinations` ADD COLUMN `host` VARCHAR(255) NOT NULL DEFAULT '',
-    ADD COLUMN `port` INTEGER NOT NULL DEFAULT 30015;

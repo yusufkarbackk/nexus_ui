@@ -6,4 +6,5 @@ export { DestinationNode } from './DestinationNode';
 export { RestDestinationNode } from './RestDestinationNode';
 export { MQTTSourceNode } from './MQTTSourceNode';
 export { SapDestinationNode } from './SapDestinationNode';
+export { SequentialWorkflowNode } from './SequentialWorkflowNode';
 

@@ -19,7 +19,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode, SapDestinationNode } from './nodes';
+import { TriggerNode, ActionNode, LogicNode, SenderAppNode, DestinationNode, RestDestinationNode, MQTTSourceNode, SapDestinationNode, SequentialWorkflowNode } from './nodes';
 import { Sidebar } from './Sidebar';
 import { MappingPanel } from './MappingPanel';
 import { SapMappingPanel } from './SapMappingPanel';
@@ -35,6 +35,7 @@ import {
   RestDestinationNodeData,
   MQTTSourceNodeData,
   SapDestinationNodeData,
+  SequentialWorkflowNodeData,
   MQTTSource,
   PipelineConfig,
   WorkflowEdge,
@@ -53,6 +54,7 @@ const nodeTypes: Record<string, React.ComponentType<any>> = {
   restDestination: RestDestinationNode,
   mqttSource: MQTTSourceNode,
   sapDestination: SapDestinationNode,
+  sequentialWorkflow: SequentialWorkflowNode,
 };
 
 let nodeIdCounter = 1;
@@ -342,7 +344,7 @@ function FlowCanvas() {
                 });
               }
             } else if (pipeline.destination) {
-              // Database destination - use separate map to avoid ID collision with REST destinations
+              // Database destination
               targetNodeId = dbDestNodeMap.get(pipeline.destinationId || 0);
               if (!targetNodeId) {
                 targetNodeId = `node-loaded-dest-${pipeline.destinationId}`;
@@ -362,12 +364,33 @@ function FlowCanvas() {
                   } as DestinationNodeData,
                 });
               }
+            } else if (pipeline.destinationType === 'sequential' && pipeline.sequentialWorkflowId && pipeline.sequentialWorkflow) {
+              // Sequential workflow destination
+              const seqWfNodeKey = pipeline.sequentialWorkflowId;
+              targetNodeId = `node-loaded-seqwf-${seqWfNodeKey}`;
+              // Always create (no dedup map needed, each pipeline = one node)
+              newNodes.push({
+                id: targetNodeId,
+                type: 'sequentialWorkflow',
+                position: { x: 500, y: 100 + ((nodeIndex - appNodeMap.size) * 200) },
+                data: {
+                  label: pipeline.sequentialWorkflow.name,
+                  description: pipeline.sequentialWorkflow.description || 'Sequential workflow',
+                  category: 'sequentialWorkflow',
+                  icon: 'git-branch',
+                  sequentialWorkflowId: pipeline.sequentialWorkflow.id,
+                  sequentialWorkflowName: pipeline.sequentialWorkflow.name,
+                  sequentialWorkflowDescription: pipeline.sequentialWorkflow.description,
+                  sequentialWorkflowIsActive: pipeline.sequentialWorkflow.isActive,
+                } as SequentialWorkflowNodeData,
+              });
             }
 
             // Create edge and pipeline config
             if (sourceNodeId && targetNodeId) {
               const isRest = pipeline.destinationType === 'rest';
               const isSap = pipeline.destinationType === 'sap';
+              const isSeq = pipeline.destinationType === 'sequential';
 
               // Generate edgeId with same format as handleMappingSave to ensure consistency
               // For SAP: include schema, table name, AND pipelineId to handle duplicates
@@ -394,6 +417,9 @@ function FlowCanvas() {
                 edgeLabel = pipeline.sapPipelineConfig
                   ? `${pipeline.sapPipelineConfig.targetSchema}.${pipeline.sapPipelineConfig.targetTable}`
                   : pipeline.targetTable || '';
+              } else if (isSeq) {
+                edgeColor = '#a855f7'; // Purple for sequential
+                edgeLabel = pipeline.sequentialWorkflow?.name || 'Sequential WF';
               }
 
               console.log(`[DEBUG] Creating edge:`, { edgeId, source: sourceNodeId, target: targetNodeId, label: edgeLabel, isSap, sapConfig: pipeline.sapPipelineConfig });
@@ -445,6 +471,8 @@ function FlowCanvas() {
                 sapQuery: pipeline.sapPipelineConfig?.sqlQuery,
                 sapQueryType: pipeline.sapPipelineConfig?.queryType,
                 sapPrimaryKey: pipeline.sapPipelineConfig?.primaryKeyColumn,
+                // Sequential workflow
+                sequentialWorkflowId: pipeline.sequentialWorkflowId,
                 fieldMappings: pipeline.fieldMappings?.map(fm => ({
                   sourceField: fm.sourceField,
                   destinationColumn: fm.destinationColumn,
@@ -658,6 +686,52 @@ function FlowCanvas() {
           targetSapDestination: targetData.sapDestination,
           pendingConnection: connection,
           existingConfig: null,
+        });
+      } else if (
+        (sourceNode?.type === 'senderApp' || sourceNode?.type === 'mqttSource') &&
+        targetNode?.type === 'sequentialWorkflow'
+      ) {
+        // Sender App / MQTT -> Sequential Workflow connection (auto-connect, no mapping needed)
+        const sourceData = sourceNode.data as SenderAppNodeData | MQTTSourceNodeData;
+        const targetData = targetNode.data as SequentialWorkflowNodeData;
+
+        const edgeId = `edge-${connection.source}-${connection.target}`;
+
+        const config: PipelineConfig = {
+          sourceNodeId: connection.source!,
+          targetNodeId: connection.target!,
+          sourceType: sourceNode.type === 'mqttSource' ? 'mqtt_source' : 'sender_app',
+          ...(sourceNode.type === 'mqttSource'
+            ? { mqttSourceId: (sourceData as MQTTSourceNodeData).mqttSource.id }
+            : { applicationId: (sourceData as SenderAppNodeData).application.id }
+          ),
+          destinationType: 'sequential',
+          sequentialWorkflowId: targetData.sequentialWorkflowId,
+          fieldMappings: [],
+        };
+
+        setEdges((eds) =>
+          addEdge(
+            {
+              ...connection,
+              id: edgeId,
+              animated: true,
+              style: { stroke: '#a855f7', strokeWidth: 2 },
+              label: targetData.sequentialWorkflowName || 'Sequential WF',
+              labelStyle: { fill: '#a855f7', fontSize: 10 },
+              labelBgStyle: { fill: '#0f172a', fillOpacity: 0.8 },
+              labelBgPadding: [4, 2] as [number, number],
+              labelBgBorderRadius: 4,
+              data: { pipelineConfig: config },
+            },
+            eds
+          )
+        );
+
+        setPipelineConfigs((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(edgeId, config);
+          return newMap;
         });
       } else {
         // For other connections, just add the edge
@@ -968,6 +1042,23 @@ function FlowCanvas() {
             sapDestination: nodeData.sapDestination,
           } as SapDestinationNodeData,
         };
+      } else if (nodeData.type === 'sequentialWorkflow' && nodeData.sequentialWorkflowId) {
+        // Handle sequential workflow drop (as fan-out destination)
+        newNode = {
+          id: generateNodeId(),
+          type: 'sequentialWorkflow',
+          position,
+          data: {
+            label: nodeData.label,
+            description: nodeData.description,
+            category: 'sequentialWorkflow',
+            icon: nodeData.icon,
+            sequentialWorkflowId: nodeData.sequentialWorkflowId!,
+            sequentialWorkflowName: nodeData.sequentialWorkflowName || nodeData.label,
+            sequentialWorkflowDescription: nodeData.sequentialWorkflowDescription,
+            sequentialWorkflowIsActive: nodeData.sequentialWorkflowIsActive ?? true,
+          } as SequentialWorkflowNodeData,
+        };
       } else {
         // Generic node (trigger, action, logic) - not senderApp, destination, restDestination, or mqttSource
         newNode = {
@@ -1078,6 +1169,8 @@ function FlowCanvas() {
         uniqueKey = `sap-${config.sourceNodeId}-${config.targetNodeId}-${config.sapTargetSchema || 'default'}-${config.targetTable || 'none'}`;
       } else if (config.destinationType === 'rest') {
         uniqueKey = `rest-${config.sourceNodeId}-${config.targetNodeId}-${config.restDestinationId}`;
+      } else if (config.destinationType === 'sequential') {
+        uniqueKey = `seq-${config.sourceNodeId}-${config.targetNodeId}-${config.sequentialWorkflowId}`;
       } else {
         uniqueKey = `db-${config.sourceNodeId}-${config.targetNodeId}-${config.targetTable || 'none'}`;
       }
@@ -1109,6 +1202,9 @@ function FlowCanvas() {
         sapTargetSchema: config.sapTargetSchema,
         sapPrimaryKey: config.sapPrimaryKey,
         targetTable: config.targetTable,
+      }),
+      ...(config.destinationType === 'sequential' && {
+        sequentialWorkflowId: config.sequentialWorkflowId,
       }),
       isActive: true,
       fieldMappings: config.fieldMappings.map((fm) => ({

@@ -20,6 +20,7 @@ import {
     Plus,
     Trash2,
     FileJson,
+    ShieldOff,
 } from 'lucide-react';
 import {
     createRestDestination,
@@ -65,6 +66,8 @@ export function RestDestinationForm() {
     const [basicUsername, setBasicUsername] = useState(''); // For basic
     const [basicPassword, setBasicPassword] = useState(''); // For basic
     const [timeoutSeconds, setTimeoutSeconds] = useState(30);
+    const [skipTlsVerify, setSkipTlsVerify] = useState(false);
+    const [bodyTemplate, setBodyTemplate] = useState('');
 
     // Body fields state
     interface BodyField {
@@ -148,6 +151,13 @@ export function RestDestinationForm() {
                             description: f.description || '',
                         })));
                     }
+                    // Load body template if present
+                    if (dest.bodyTemplate) {
+                        setBodyTemplate(dest.bodyTemplate);
+                    }
+                    if (dest.skipTlsVerify !== undefined) {
+                        setSkipTlsVerify(dest.skipTlsVerify);
+                    }
                     // Auth config is not returned for security
                 } else {
                     setError(response.message || 'Failed to load REST destination');
@@ -180,6 +190,29 @@ export function RestDestinationForm() {
         setTestResult(null);
 
         try {
+            // Build test payload from body template if available
+            let testPayload: string | undefined;
+            if (bodyTemplate.trim()) {
+                let templated = bodyTemplate;
+                // Replace {{field_name}} with dummy values from body fields
+                for (const field of bodyFields) {
+                    if (!field.name.trim()) continue;
+                    let dummyValue: string;
+                    switch (field.type) {
+                        case 'number':
+                            dummyValue = '0';
+                            break;
+                        case 'boolean':
+                            dummyValue = 'true';
+                            break;
+                        default:
+                            dummyValue = `test_${field.name}`;
+                    }
+                    templated = templated.replaceAll(`{{${field.name}}}`, dummyValue);
+                }
+                testPayload = templated;
+            }
+
             const result = await testRestConnection({
                 baseUrl,
                 method,
@@ -187,6 +220,8 @@ export function RestDestinationForm() {
                 authType,
                 authConfig: getAuthConfig(),
                 timeoutSeconds,
+                skipTlsVerify,
+                testPayload,
             });
             setTestResult(result);
         } catch (err) {
@@ -223,9 +258,11 @@ export function RestDestinationForm() {
                     method,
                     headers: headers || undefined,
                     bodyFields: bodyFieldsPayload.length > 0 ? bodyFieldsPayload : undefined,
+                    bodyTemplate: bodyTemplate.trim() || undefined,
                     authType,
                     authConfig: getAuthConfig(),
                     timeoutSeconds,
+                    skipTlsVerify,
                 });
 
                 if (response.success) {
@@ -251,9 +288,11 @@ export function RestDestinationForm() {
                     method,
                     headers: headers || undefined,
                     bodyFields: bodyFieldsPayload.length > 0 ? bodyFieldsPayload : undefined,
+                    bodyTemplate: bodyTemplate.trim() || undefined,
                     authType,
                     authConfig: getAuthConfig(),
                     timeoutSeconds,
+                    skipTlsVerify,
                 };
 
                 response = await createRestDestination(payload);
@@ -470,6 +509,26 @@ export function RestDestinationForm() {
                                         />
                                     </div>
                                 </div>
+                                <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-slate-700 mt-4">
+                                    <div className="flex items-center gap-3">
+                                        <ShieldOff className={`w-4 h-4 ${skipTlsVerify ? 'text-amber-400' : 'text-slate-500'}`} />
+                                        <div>
+                                            <p className="text-sm font-medium text-slate-300">Skip TLS Verification</p>
+                                            <p className="text-xs text-slate-500">Disable SSL certificate validation (for self-signed certs or IP addresses)</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setSkipTlsVerify(!skipTlsVerify)}
+                                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 focus:ring-offset-slate-900 ${skipTlsVerify ? 'bg-amber-500' : 'bg-slate-600'
+                                            }`}
+                                    >
+                                        <span
+                                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${skipTlsVerify ? 'translate-x-6' : 'translate-x-1'
+                                                }`}
+                                        />
+                                    </button>
+                                </div>
                             </div>
                         </section>
 
@@ -677,6 +736,30 @@ export function RestDestinationForm() {
                                         </div>
                                     ))}
                                 </div>
+                            )}
+                        </section>
+
+                        {/* Body Template (JSON) */}
+                        <section className="bg-slate-900 rounded-xl border border-slate-800 p-6">
+                            <div className="flex items-center gap-2 mb-4">
+                                <FileJson className="w-5 h-5 text-slate-400" />
+                                <h2 className="text-lg font-semibold text-white">Body Template (JSON)</h2>
+                                <span className="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded">Optional</span>
+                            </div>
+                            <p className="text-sm text-slate-400 mb-3">
+                                Define a JSON template for complex nested request bodies. Use <code className="text-orange-400 bg-slate-800 px-1 rounded">{`{{field_name}}`}</code> placeholders that will be replaced with mapped field values at runtime.
+                            </p>
+                            <textarea
+                                value={bodyTemplate}
+                                onChange={(e) => setBodyTemplate(e.target.value)}
+                                placeholder={`{\n  "auth": {\n    "identity": {\n      "methods": ["password"],\n      "password": {\n        "user": {\n          "name": "{{name}}",\n          "password": "{{password}}"\n        }\n      }\n    }\n  }\n}`}
+                                rows={10}
+                                className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-y font-mono text-sm"
+                            />
+                            {bodyTemplate.trim() && (
+                                <p className="text-xs text-slate-500 mt-2">
+                                    💡 When this template is set, the mapped field values will be injected into the template instead of being sent as a flat JSON body.
+                                </p>
                             )}
                         </section>
 

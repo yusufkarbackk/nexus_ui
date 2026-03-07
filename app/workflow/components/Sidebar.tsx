@@ -29,11 +29,13 @@ import {
   fetchRestDestinations,
   fetchMqttSources,
   fetchSapDestinations,
+  fetchWorkflows,
   Application,
   Destination,
   RestDestination,
   MQTTSource,
   SapDestination,
+  Workflow,
 } from '@/app/lib/api';
 
 const iconMap: Record<string, LucideIcon> = {
@@ -81,6 +83,8 @@ function DraggableNode({ node }: { node: DraggableNodeItem }) {
         return 'bg-orange-100';
       case 'sapDestination':
         return 'bg-rose-100';
+      case 'sequentialWorkflow':
+        return 'bg-purple-100';
       default:
         return 'bg-slate-100';
     }
@@ -119,11 +123,13 @@ export function Sidebar({ className, workflowType = 'fan_out' }: SidebarProps) {
   const [restDestinations, setRestDestinations] = useState<RestDestination[]>([]);
   const [mqttSources, setMqttSources] = useState<MQTTSource[]>([]);
   const [sapDestinations, setSapDestinations] = useState<SapDestination[]>([]);
+  const [sequentialWorkflows, setSequentialWorkflows] = useState<Workflow[]>([]);
   const [isLoadingApps, setIsLoadingApps] = useState(true);
   const [isLoadingDests, setIsLoadingDests] = useState(true);
   const [isLoadingRestDests, setIsLoadingRestDests] = useState(true);
   const [isLoadingMqtt, setIsLoadingMqtt] = useState(true);
   const [isLoadingSap, setIsLoadingSap] = useState(true);
+  const [isLoadingSeqWf, setIsLoadingSeqWf] = useState(true);
 
   const loadApplications = async () => {
     setIsLoadingApps(true);
@@ -191,7 +197,20 @@ export function Sidebar({ className, workflowType = 'fan_out' }: SidebarProps) {
     loadRestDestinations();
     loadMqttSources();
     loadSapDestinations();
+    loadSequentialWorkflows();
   }, []);
+
+  const loadSequentialWorkflows = async () => {
+    setIsLoadingSeqWf(true);
+    try {
+      const response = await fetchWorkflows();
+      setSequentialWorkflows((response.data || []).filter(w => w.workflowType === 'sequential' && w.isActive));
+    } catch (error) {
+      console.error('Failed to load sequential workflows:', error);
+    } finally {
+      setIsLoadingSeqWf(false);
+    }
+  };
 
   // Convert applications to draggable nodes
   const senderAppNodes: DraggableNodeItem[] = applications.map((app) => ({
@@ -246,6 +265,19 @@ export function Sidebar({ className, workflowType = 'fan_out' }: SidebarProps) {
     icon: 'server',
     sapDestinationId: dest.id,
     sapDestination: dest,
+  }));
+
+  // Convert sequential workflows to draggable nodes
+  const sequentialWorkflowNodes: DraggableNodeItem[] = sequentialWorkflows.map((wf) => ({
+    type: 'sequentialWorkflow',
+    label: wf.name,
+    description: wf.description || 'Sequential workflow',
+    category: 'sequentialWorkflow' as const,
+    icon: 'git-branch',
+    sequentialWorkflowId: wf.id,
+    sequentialWorkflowName: wf.name,
+    sequentialWorkflowDescription: wf.description,
+    sequentialWorkflowIsActive: wf.isActive,
   }));
 
   // Keep legacy nodes for triggers and logic
@@ -473,6 +505,45 @@ export function Sidebar({ className, workflowType = 'fan_out' }: SidebarProps) {
                 ) : (
                   <p className="text-xs text-slate-500 text-center py-2">
                     No SAP destinations configured
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Sequential Workflows */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-purple-500" />
+                  <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                    Sequential WF
+                  </h3>
+                </div>
+                <button
+                  onClick={loadSequentialWorkflows}
+                  disabled={isLoadingSeqWf}
+                  className="p-1 hover:bg-slate-700 rounded transition-colors"
+                  title="Refresh sequential workflows"
+                >
+                  {isLoadingSeqWf ? (
+                    <Loader2 className="w-3 h-3 text-slate-500 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-3 h-3 text-slate-500" />
+                  )}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {isLoadingSeqWf ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 text-slate-500 animate-spin" />
+                  </div>
+                ) : sequentialWorkflowNodes.length > 0 ? (
+                  sequentialWorkflowNodes.map((node) => (
+                    <DraggableNode key={`seqwf-${node.sequentialWorkflowId}`} node={node} />
+                  ))
+                ) : (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    No sequential workflows found
                   </p>
                 )}
               </div>
